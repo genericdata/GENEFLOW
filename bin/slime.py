@@ -79,6 +79,14 @@ def get_lib_barcodes(lib_id):
     return barcodes
 
 
+def check_do_merge(fcid):
+    run = get_run_info(fcid)
+    run_type = run["run_type_name"]
+    return (
+        "NextSeq" in run["sequencer"]["name"] or "NovaSeq" in run["sequencer"]["name"]
+    ) and not run_type.startswith("XP")
+
+
 # Check all lanes for the value of demux for the pool in that lane
 # either they will all have the same value (miseq, nextseq, some hiseqs)
 # or occasionally a hiseq will have lanes with different specs for demux

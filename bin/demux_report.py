@@ -6,7 +6,7 @@ import sys
 import json
 from collections import defaultdict
 from interop import py_interop_run_metrics, py_interop_run, py_interop_summary
-from slime import get_run_info
+from slime import check_do_merge
 
 
 def compute_lane_metrics_from_sav(summary):
@@ -63,14 +63,6 @@ def parse_sav(run_folder):
     py_interop_summary.summarize_run_metrics(run_metrics, summary)
     metrics = compute_lane_metrics_from_sav(summary)
     return metrics
-
-
-def check_do_merge(fcid):
-    run = get_run_info(fcid)
-    run_type = run["run_type_name"]
-    return (
-        "NextSeq" in run["sequencer"]["name"] or "NovaSeq" in run["sequencer"]["name"]
-    ) and not run_type.startswith("XP")
 
 
 def generate_reports(pheniqs_out_files, run_dir_path, fcid, no_demux):

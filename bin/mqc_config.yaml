@@ -1,0 +1,15 @@
+report_section_order:
+  general_stats:
+    order: 1000
+  demux_report:
+    order: 900
+  demux_report-1:
+    order: 900
+  demux_report-2:
+    order: 900
+  undetermined_barcodes:
+    order: 800
+  run_stats:
+    order: 700
+  fastqc:
+    order: 500

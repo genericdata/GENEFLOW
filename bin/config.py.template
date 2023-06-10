@@ -1,0 +1,12 @@
+tw_api_key = ""
+tw_user = ""
+tw_api_root = ""
+
+delivery_folder_root = ""
+raw_run_dir_delivery_root = ""
+
+gmail_pwd = ""
+gmail_user = ""
+
+
+

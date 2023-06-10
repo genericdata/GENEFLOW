@@ -123,7 +123,7 @@ def create_summary_report(
 
 def summary_reports(lanes_dict, do_merge, fcid, phix_aligned_per_lane):
     if do_merge:
-        path = "merged/{}_summary_mqc.txt".format(fcid)
+        path = "merged/{}_merged_summary_mqc.txt".format(fcid)
         fc_read_count = get_flowcell_read_count(lanes_dict)
         phix_aligned = sum(phix_aligned_per_lane.values()) / len(phix_aligned_per_lane)
         report = create_summary_report(
@@ -137,7 +137,7 @@ def summary_reports(lanes_dict, do_merge, fcid, phix_aligned_per_lane):
         write_report(report, path)
     else:
         for l in sorted(lanes_dict):
-            path = "{}/{}_l0{}_summary_mqc.txt".format(l, fcid, l)
+            path = "{}/{}_{}_summary_mqc.txt".format(l, fcid, l)
             report = create_summary_report(
                 "Lane",
                 l,

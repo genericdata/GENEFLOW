@@ -4,10 +4,8 @@ def lanes = channel.from(1..params.lanes)
 def run_dir_path = params.run_dir_path
 def run_dir_name = new File(run_dir_path).getName()
 def parts = run_dir_name.split('_')
-def seq_id = ""
+def seq_id = parts[1]
 def fcid = ""
-
-seq_id = parts[1]
 
 def fcidPart = parts[3]
 if (fcidPart.startsWith("A") || fcidPart.startsWith("B")) {
@@ -16,32 +14,29 @@ if (fcidPart.startsWith("A") || fcidPart.startsWith("B")) {
 	fcid = fcidPart
 }
 
+println "run_dir_path: $run_dir_path"
 println "seq_id: $seq_id"
 println "fcid: $fcid"
 
 process tar {
-	afterScript 'echo "Tar completed." | mail -s "Process Complete" your_email@example.com'
-
-	input: 
-	val tarName
+	//afterScript 'echo "Tar completed." | mail -s "Process Complete" your_email@example.com'
 
 	output:
 	path '*.tar.bz2', emit: file
 
 	script:
 	"""
-	tar cvjf ${tarName}.tar.bz2 ${params.run_dir_path}
+	tar cvjf ${run_dir_name}.tar.bz2 ${run_dir_path}
 	"""
 }
 
 process rsyncToArchive {
 	input:
 	path SRC 
-	val seq_id
 
 	shell:
 	"""
-	echo "rsync --copy-links --progress -e \"ssh -i ${HOME}/.ssh/id_rsa\" !{SRC} mk5636@babylon.bio.nyu.edu:/mnt/gencore/hpcpipe/archive/!{seq_id}"
+	rsync --copy-links --progress -e \"ssh -i \${HOME}/.ssh/id_rsa\" ${SRC} core2:${archive_path}/${seq_id}/.
 	"""
 }
 
@@ -155,14 +150,46 @@ process _qc {
 	val pheniqs_out
 
 	output:
-	//env(success), emit: success
+	env(success), emit: success
+
+	beforeScript "export PYTHONPATH=$PYTHONPATH:${workflow.projectDir}/bin"
 
 	shell
 	"""
+	# create reports
 	demux_report.py "${pheniqs_out}" $run_dir_path $fcid $params.no_demux
-	merge.sh $fcid $params.no_demux $alpha
-	do_fastqc.sh </path/to/data: either alpha/sample/default/fcid, alpha/lane/default/fcid/, or alpha/merged/fcid>
-	//rsync_qc_to_web 
+
+	# check if we should merge, and merge if so
+	do_merge=\$(python3 -c "from slime import check_do_merge;r=check_do_merge('HHWYGAFX5');print(str(r).lower())")
+	echo "do_merge: \$do_merge"
+	
+	if [ "\$do_merge" == "true" ];then
+		merge.sh $fcid $params.no_demux $alpha
+	fi
+
+	# get the path to the deliverable fastq files and run fastqc
+	if [ "\$do_merge" = "true" ]; then
+		path="$alpha/merged/$fcid"
+	elif [ "\$do_merge" = "false" ] && [ "$params.no_demux" = "false" ]; then
+		path="$alpha/sample/default/$fcid"
+	elif [ "\$do_merge" = "false" ] && [ "$params.no_demux" = "true" ]; then
+		path="$alpha/lane/default/$fcid"
+	else
+		echo "Invalid states. Check your do_merge and no_demux variables."
+	fi
+
+	echo "Path is set to: \$path"
+	do_fastqc.sh \$path ${workflow.projectDir}/bin/mqc_config.yaml
+
+	# rsync to core-fastqc server (mkdir first)
+	ssh -i $HOME/.ssh/id_rsa core2 "mkdir -p ${fastqc_path}/${fcid}/"
+	rsync -r -e "ssh -i $HOME/.ssh/id_rsa" --exclude=".*" . core2:${fastqc_path}/${fcid}/.
+
+	# check qc and deliver
+	summary_report=\$(ls */*summary_mqc.txt)
+	qc.py \$summary_report \$path $run_dir_path
+
+	success=false
 	"""
 
 }
@@ -185,35 +212,6 @@ process _deliver {
 
 }
 
-process _test {
-	echo true
-
-	shell:
-	'''
-	lane_num=4
-	run_dir_name=$(basename !{params.run_dir_path})
-	fcid=${run_dir_name##*_}
-	if [[ ${fcid} != *"-"* ]] && [ ${#fcid} -gt 5 ];then
-		fcid=${fcid:1}
-	fi
-	URL="!{tw_api_root}flowcell/illumina/${fcid}/?username=!{tw_user}&api_key=!{tw_api_key}"
-	o=$(curl -s "$URL")
-	echo "o = " $o
-	id=$(echo "$response" | python3 -c '
-	import json
-
-	response = input()
-	data = json.loads(response)
-	lane_num = '$lane_num'
-	id = [lane["id"] for lane in data["lanes"] if lane["lane_number"] == int(lane_num)][0]
-	print(id)
-	')
-	'''
-}
-
-workflow test{
-	_test()
-}
 
 workflow _demux{
 	take:
@@ -226,8 +224,8 @@ workflow _demux{
 }
 
 workflow archive{
-	tar(run_dir_name)
-	rsyncToArchive(tar.out.file, seq_id)
+	tar()
+	rsyncToArchive(tar.out.file)
 }
 
 workflow basecall{
@@ -259,7 +257,7 @@ workflow pheniqs_conf{
 }
 
 workflow {
-	//archive()
+	archive()
 	_basecall(lanes)
 	_demux(_basecall.out.lane) 
 	def qc_dep = params.no_demux ? _basecall.out.lane.collect() : _demux.out.collect()

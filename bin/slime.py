@@ -1,7 +1,30 @@
+#!/usr/bin/env python3
+
 import requests
 import json
+import smtplib
 from xml.dom import minidom
-from config import tw_api_root, tw_user, tw_api_key
+from config import tw_api_root, tw_user, tw_api_key, gmail_user, gmail_pwd
+
+
+def send_email(recipient, subject, body):
+    FROM = gmail_user
+    TO = recipient if isinstance(recipient, list) else [recipient]
+    SUBJECT = subject
+    TEXT = body
+
+    # Prepare actual message
+    message = f"""From: {FROM}\nTo: {", ".join(TO)}\nSubject: {SUBJECT}\n\n{TEXT}"""
+
+    try:
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.ehlo()
+            server.starttls()
+            server.login(gmail_user, gmail_pwd)
+            server.sendmail(FROM, TO, message)
+
+    except Exception as e:
+        print("Failed to send email:", str(e))
 
 
 def get_run_info(fcid):

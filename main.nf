@@ -5,14 +5,9 @@ def run_dir_path = params.run_dir_path
 def run_dir_name = new File(run_dir_path).getName()
 def parts = run_dir_name.split('_')
 def seq_id = parts[1]
-def fcid = ""
-
 def fcidPart = parts[3]
-if (fcidPart.startsWith("A") || fcidPart.startsWith("B")) {
-	fcid = fcidPart.substring(1)
-} else {
-	fcid = fcidPart
-}
+def fcid = fcidPart.matches("^[AB].*") ? fcidPart.substring(1) : fcidPart
+
 
 println "run_dir_path: $run_dir_path"
 println "seq_id: $seq_id"

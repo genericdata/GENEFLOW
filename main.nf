@@ -1,6 +1,5 @@
 nextflow.enable.dsl=2
 
-def lanes = channel.from(1..params.lanes)
 def run_dir_path = params.run_dir_path
 def run_dir_name = new File(run_dir_path).getName()
 def parts = run_dir_name.split('_')
@@ -8,10 +7,17 @@ def seq_id = parts[1]
 def fcidPart = parts[3]
 def fcid = fcidPart.matches("^[AB].*") ? fcidPart.substring(1) : fcidPart
 
+def num_lanes = new File(run_dir_path,'/Data/Intensities/BaseCalls')
+	.listFiles()
+	.findAll { it.name ==~ /L[0-9]{3}/ }
+	.size()
+
+def lanes = channel.from(1..num_lanes)
 
 println "run_dir_path: $run_dir_path"
 println "seq_id: $seq_id"
 println "fcid: $fcid"
+println "num_lanes: $num_lanes"
 
 process tar {
 	//afterScript 'echo "Tar completed." | mail -s "Process Complete" your_email@example.com'

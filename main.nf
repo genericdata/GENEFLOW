@@ -239,7 +239,7 @@ process merge_lanes {
 
     tag "${fcid}"
 
-	beforeScript "export PYTHONPATH=$PYTHONPATH:${workflow.projectDir}/bin"
+    beforeScript "export PYTHONPATH=$PYTHONPATH:${workflow.projectDir}/bin"
 
     input:
     val lanes //need to wait for all lanes
@@ -322,12 +322,12 @@ process fastqc {
 
     tag "${fcid}"
 
-	beforeScript "export PYTHONPATH=$PYTHONPATH:${workflow.projectDir}/bin"
+    beforeScript "export PYTHONPATH=$PYTHONPATH:${workflow.projectDir}/bin"
 
     input:
     val path
     val merge_exit_code
-	val qc_dep // need to wait for basecalling/demuxing to finish
+    val qc_dep // need to wait for basecalling/demuxing to finish
 
     output:
     path(".command.*")
@@ -337,13 +337,13 @@ process fastqc {
     merge_exit_code == "0"
 
     script:
-	lane = new File(path).getName().trim()
+    lane = new File(path).getName().trim()
     """
-	echo "path: $path"
-	mkdir $lane
-	cd $lane
+    echo "path: $path"
+    mkdir $lane
+    cd $lane
     do_fastqc.sh $path
-	cd ..
+    cd ..
     """
 }
 
@@ -354,11 +354,11 @@ process multiqc {
 
     tag "${fcid}"
 
-	module "multiqc/1.9"
+    module "multiqc/1.9"
 
     input:
-	tuple(val(path_to_data), path(fastqc))
-	path reports
+    tuple(val(path_to_data), path(fastqc))
+    path reports
 
     output:
     path("${lane}/"), emit: files
@@ -366,15 +366,15 @@ process multiqc {
     path(".command.*")
 
     shell:
-	lane = fastqc.getName()
+    lane = fastqc.getName()
     """
-	echo "fastqc: $fastqc"
-	echo "reports: $reports"
-	echo "lane: $lane"
-	echo "path: $path_to_data"
+    echo "fastqc: $fastqc"
+    echo "reports: $reports"
+    echo "lane: $lane"
+    echo "path: $path_to_data"
 
-	cp ${fcid}_${lane}_*_mqc.txt ${lane}/.
-	cd ${lane}
+    cp ${fcid}_${lane}_*_mqc.txt ${lane}/.
+    cd ${lane}
     multiqc -f -c ${workflow.projectDir}/bin/mqc_config.yaml .
     """
 }
@@ -387,92 +387,92 @@ process deliver {
     tag "${fcid}"
 
     input:
-	val archive_exit_code
-	val rsync_exit_code
-	tuple(val(path), path(summary_report))
+    val archive_exit_code
+    val rsync_exit_code
+    tuple(val(path), path(summary_report))
 
     output:
     path(".command.*")
 
-	when:
-	archive_exit_code.toInteger() == 0 && rsync_exit_code.toInteger() == 0
+    when:
+    archive_exit_code.toInteger() == 0 && rsync_exit_code.toInteger() == 0
 
     shell:
-	lane = new File(path).getName().trim()
+    lane = new File(path).getName().trim()
     """
-	echo "path: $path"
-	echo "summary_report: $summary_report"
-	echo "archive_exit_code: $archive_exit_code"
+    echo "path: $path"
+    echo "summary_report: $summary_report"
+    echo "archive_exit_code: $archive_exit_code"
 
     # check qc and deliver
-	qc_deliver.py ${path.trim()} ${summary_report}
+    qc_deliver.py ${path.trim()} ${summary_report}
     """
 }
 
 workflow _demux{
-	take:
-		lane
-	main:
-		check_no_demux(lane)
-		make_pheniqs_config(check_no_demux.out.lane)
-		run_pheniqs(make_pheniqs_config.out.pheniqs_conf)
-	emit:
-		run_pheniqs.out.lane
+    take:
+	lane
+    main:
+	check_no_demux(lane)
+	make_pheniqs_config(check_no_demux.out.lane)
+	run_pheniqs(make_pheniqs_config.out.pheniqs_conf)
+    emit:
+	run_pheniqs.out.lane
 }
 
 workflow _qc{
     take:
-		archive_exit_code
+	archive_exit_code
         qc_dep
     main:
         demux_reports(qc_dep)
-		check_do_merge()
+	check_do_merge()
         do_merge = check_do_merge.out.do_merge
         merge_lanes(qc_dep, do_merge)
-		get_lane_paths(do_merge)
-		path = get_lane_paths.out.paths.splitText()
+	get_lane_paths(do_merge)
+	path = get_lane_paths.out.paths.splitText()
         fastqc_dep = merge_lanes.out.exit_code.ifEmpty("0")
         fastqc(path, fastqc_dep, qc_dep)
         multiqc(fastqc.out.delivery_path_and_fastqc_files, demux_reports.out.reports)
         rsyncToArchive(multiqc.out.files, fastqc_path + "/${fcid}/")
-		deliver(archive_exit_code, rsyncToArchive.out.exit_code, multiqc.out.delivery_path_and_summary_report)
+	deliver(archive_exit_code, rsyncToArchive.out.exit_code, multiqc.out.delivery_path_and_summary_report)
 }
 
 workflow archive{
-	main:
-		tar()
-		rsyncToArchive(tar.out.file, archive_path + "/${seq_id}/")
-	emit:
-		rsyncToArchive.out.exit_code
+    main:
+	tar()
+	rsyncToArchive(tar.out.file, archive_path + "/${seq_id}/")
+    emit:
+	rsyncToArchive.out.exit_code
 }
 
 workflow basecall{
-	_basecall(lanes)
-	_demux(_basecall.out.lane) 
+    _basecall(lanes)
+    _demux(_basecall.out.lane) 
     qc_dep = _demux.out.collect().ifEmpty(_basecall.out.lane.collect())
-	_qc(0, qc_dep)
+    _qc(0, qc_dep)
 }
 
 workflow demux{
-	_demux(lanes) 
+    _demux(lanes) 
     qc_dep = _demux.out.collect().ifEmpty('')
-	_qc(0, qc_dep)
+    _qc(0, qc_dep)
 }
 
 workflow qc{
-	_qc(0, '') 
+    _qc(0, '') 
 }
 
 workflow pheniqs_conf{
-	make_pheniqs_config(lanes)
+    make_pheniqs_config(lanes)
 }
 
 workflow {
-	archive()
-	_basecall(lanes)
-	_demux(_basecall.out.lane) 
+    archive()
+    _basecall(lanes)
+    _demux(_basecall.out.lane) 
     qc_dep = _demux.out.collect().ifEmpty(_basecall.out.lane.collect())
-	_qc(archive.out, qc_dep)
+    _qc(archive.out, qc_dep)
 }
 
 workflow.onComplete {

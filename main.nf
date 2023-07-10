@@ -122,7 +122,8 @@ process _basecall {
 
 	for nib in nibbles:
 		read_structure += nib.attributes['NumCycles'].value + 'T'
-		print(read_structure)
+	
+	print(read_structure)
 	")
 
 	run_barcode=\$(python3 -c "

@@ -4,9 +4,11 @@ import os
 import re
 import sys
 import json
+import glob
 from collections import defaultdict
 from interop import py_interop_run_metrics, py_interop_run, py_interop_summary
-from slime import check_do_merge
+from slime import check_do_merge, check_demux, get_run_dir, get_num_lanes
+from config import alpha
 
 
 def compute_lane_metrics_from_sav(summary):
@@ -65,23 +67,26 @@ def parse_sav(run_folder):
     return metrics
 
 
-def generate_reports(pheniqs_out_files, run_dir_path, fcid, no_demux):
-    sav = parse_sav(run_dir_path)
+def generate_reports(fcid):
+    run_dir = get_run_dir(fcid)['run_dir']
+    num_lanes = get_num_lanes(fcid)
+    sav = parse_sav(run_dir)
+    print("sav: {}".format(sav))
     phix_aligned_per_lane = sav["phix_aligned_dict"]
     total_num_reads = sav["total_num_reads"]
+    total_pf_reads = sav["total_pf_reads"]
 
     lanes_dict = {}
-    for lane, pheniqs_out in pheniqs_out_files:
-        lane = int(lane)
-        lanes_dict[lane] = parse_pheniqs_output(pheniqs_out)
-        lanes_dict[lane]["lane_read_count_total_unfiltered"] = total_num_reads[lane]
+    for lane in range(1, num_lanes + 1):
+        lanes_dict[lane] = {"lane_read_count_total_unfiltered": total_num_reads[lane]}
+        no_demux = check_demux(fcid, lane)
+        if not no_demux:
+            pheniqs_out = get_pheniqs_output(fcid, lane)
+            lanes_dict[lane].update(parse_pheniqs_output(pheniqs_out))
 
     do_merge = check_do_merge(fcid)
-
-    if not no_demux:
-        demux_reports(lanes_dict, do_merge, fcid)
-
-    summary_reports(lanes_dict, do_merge, fcid, phix_aligned_per_lane)
+    prepare_demux_reports(lanes_dict, do_merge, fcid)
+    prepare_summary_reports(lanes_dict, do_merge, fcid, phix_aligned_per_lane, total_pf_reads)
 
 
 def create_demux_report(libs, num_lanes):
@@ -108,50 +113,61 @@ def create_summary_report(
     read_count_total_filtered,
     undetermined,
     phix_aligned,
+    no_demux
 ):
+    undetermined_header = "" if no_demux else "\t% Undetermined"
+    undetermined_value = "" if no_demux else "\t{:.2f}".format(undetermined)
+    
     summary = "\n".join(
         [
             "# id: 'run_stats'",
             "# plot_type: 'table'",
             "# section_name: 'Run Statistics'",
-            f"{lane_header}\tTotal # of Single-End Reads\tTotal # PF Reads\t% Undetermined\t% PhiX Aligned",
-            f"{lane_col}\t{int(read_count_total_unfiltered):,d}\t{read_count_total_filtered:,d}\t{undetermined}\t{phix_aligned:.2f}",
+            f"{lane_header}\tTotal # of Single-End Reads\tTotal # PF Reads{undetermined_header}\t% PhiX Aligned",
+            f"{lane_col}\t{int(read_count_total_unfiltered):,d}\t{int(read_count_total_filtered):,d}{undetermined_value}\t{phix_aligned:.2f}",
         ]
     )
     return summary
 
 
-def summary_reports(lanes_dict, do_merge, fcid, phix_aligned_per_lane):
+def prepare_summary_reports(lanes_dict, do_merge, fcid, phix_aligned_per_lane,total_pf_reads):
     if do_merge:
         path = "merged/{}_merged_summary_mqc.txt".format(fcid)
         fc_read_count = get_flowcell_read_count(lanes_dict)
         phix_aligned = sum(phix_aligned_per_lane.values()) / len(phix_aligned_per_lane)
+        no_demux = check_demux(fcid, 1)
         report = create_summary_report(
             "Number of Lanes",
             len(lanes_dict),
             fc_read_count["total_unfiltered"],
-            fc_read_count["total_filtered"],
-            fc_read_count["undetermined"],
+            sum(total_pf_reads.values()) if no_demux else fc_read_count["total_filtered"],
+            "" if no_demux else fc_read_count["undetermined"],
             phix_aligned,
+            no_demux
         )
         write_report(report, path)
     else:
         for l in sorted(lanes_dict):
             path = "{}/{}_{}_summary_mqc.txt".format(l, fcid, l)
+            no_demux = check_demux(fcid, l)
             report = create_summary_report(
                 "Lane",
                 l,
                 lanes_dict[l]["lane_read_count_total_unfiltered"],
-                lane_dict[l]["lane_read_count_total_filtered"],
-                lane_dict[l]["undetermined"],
+                total_pf_reads[l] if no_demux else lanes_dict[l]["lane_read_count_total_filtered"],
+                "" if no_demux else lanes_dict[l]["undetermined"],
                 phix_aligned_per_lane[l],
+                no_demux
             )
             write_report(report, path)
 
 
-def demux_reports(lanes_dict, do_merge, fcid):
+def prepare_demux_reports(lanes_dict, do_merge, fcid):
     if do_merge:
-        path = "merged/{}_demux_report_mqc.txt".format(fcid)
+        no_demux = check_demux(fcid, 1)
+        if no_demux:
+            return
+        path = "merged/{}_merged_demux_report_mqc.txt".format(fcid)
         combined = defaultdict(dict)
         for l in sorted(lanes_dict):
             for lib, lib_data in lanes_dict[l]["libs"].items():
@@ -165,8 +181,11 @@ def demux_reports(lanes_dict, do_merge, fcid):
         write_report(report, path)
     else:
         for l in sorted(lanes_dict):
-            path = "{}/{}_l0{}_demux_report_mqc.txt".format(l, fcid, l)
-            report = create_demux_report(lanes_dict[l], 1)
+            no_demux = check_demux(fcid, l)
+            if no_demux:
+                continue
+            path = "{}/{}_{}_demux_report_mqc.txt".format(l, fcid, l)
+            report = create_demux_report(lanes_dict[l]['libs'], 1)
             write_report(report, path)
 
 
@@ -190,7 +209,7 @@ def get_flowcell_read_count(lanes):
         fc_read_count_total_unfiltered += lanes[l]["lane_read_count_total_unfiltered"]
         fc_read_count_total_filtered += lanes[l]["lane_read_count_total_filtered"]
         fc_undetermined += lanes[l]["undetermined"]
-    fc_undetermined = round((fc_undetermined / len(lanes)) * 100, 2)
+    fc_undetermined = round((fc_undetermined / len(lanes)), 2)
 
     return {
         "total_unfiltered": fc_read_count_total_unfiltered,
@@ -221,37 +240,25 @@ def parse_pheniqs_output(report):
         "demultiplex output report"
     ]["pf count"]
     lane_dict["undetermined"] = (
-        1 - json_data["demultiplex output report"]["multiplex fraction"]
+        round((1 - json_data["demultiplex output report"]["multiplex fraction"])*100,3)
     )
     lane_dict["portion_total"] = round(portion_total, 0)
 
     return lane_dict
 
 
-def main():
-    # Extract the list elements from pheniqs_out_files using regular expressions
-    list_arg = sys.argv[1]
-    nested_list = re.findall(r"\[([^]]+)]", list_arg)
-    pheniqs_out_files = [re.split(r",\s*", item) for item in nested_list][0]
+def get_pheniqs_output(fcid, lane):
+    file_path = os.path.join(alpha, "pheniqs_out", fcid, str(lane), 'demux.out')
 
-    # Reshape the list to have nested lists of two elements
-    pheniqs_out_files = [
-        pheniqs_out_files[i : i + 2] for i in range(0, len(pheniqs_out_files), 2)
-    ]
+    if os.path.isfile(file_path):
+        return file_path
+    else:
+        print(f'demux_report.py: get_pheniqs_output: {file_path} does not exist.')
 
-    # Get the other arguments
-    run_dir_path = sys.argv[2]
-    fcid = sys.argv[3]
-    no_demux = True if sys.argv[4] == "true" else False
 
-    # Print the arguments for debugging
-    print("pheniqs_out_files: {}".format(pheniqs_out_files))
-    print("run_dir_path: {}".format(run_dir_path))
-    print("fcid: {}".format(fcid))
-    print("no_demux: {}".format(no_demux))
-
-    # Generate the reports
-    generate_reports(pheniqs_out_files, run_dir_path, fcid, no_demux)
+def main():    
+    fcid = sys.argv[1]
+    generate_reports(fcid)
 
 
 if __name__ == "__main__":

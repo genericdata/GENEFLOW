@@ -1,14 +1,23 @@
 #!/bin/bash
 
-## USAGE: sh merge.sh <fcid> <no_demux: "true" or "false"> <alpha>
+## USAGE: sh merge.sh <fcid> <alpha>
 
 fcid=$1
-no_demux=$2
-alpha=$3
+alpha=${2:-/scratch/mk5636/alpha}
 
-echo "fcid: $fcid"
-echo "no demux: $no_demux"
-echo "alpha: $alpha"
+echo "merge.sh: fcid: $fcid"
+echo "merge.sh: alpha: $alpha"
+
+# since we're merging, can use lane 1 to check if run is demuxed or not
+no_demux=$(python3 -c "from slime import check_demux;r=check_demux('${fcid}', 1);print(str(r).lower())" 2>&1)
+
+# Check if Python script executed successfully immediately after execution
+if [ $? -ne 0 ]; then
+  echo "merge.sh: ERROR: Failed to assign no_demux: $no_demux"
+  exit 1
+fi
+
+echo "merge.sh: no_demux: $no_demux"
 
 if [ "$no_demux" == "true" ]; then
     folderType="lane"

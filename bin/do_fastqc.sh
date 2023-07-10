@@ -1,30 +1,30 @@
 #!/bin/bash
 
-## USAGE: sh do_fastqc.sh </path/to/data> <path/to/mqc_config.yaml>
+## USAGE: sh do_fastqc.sh <path_to_data>
+## EXAMPLE: sh do_fastqc.sh /scratch/mk5636/alpha/lane/HH2KLM7XX/1
+## EXAMPLE: sh do_fastqc.sh /scratch/mk5636/alpha/sample/HH2KLM7XX/1
+## EXAMPLE: sh do_fastqc.sh /scratch/mk5636/alpha/merged/HWDFCAKXY/merged
 
 # Load required modules
 module purge
 module load fastqc/0.11.9
-module load multiqc/1.9
 
-# Loop over all (lane) directories
-for dir in ${1}/*
-do
-    echo "Processing directory: $dir"
+echo "Starting FastQC"
 
-    # Make and change into directory for output
-    dir_name=$(basename "$dir")
-    mkdir -p $dir_name
-    cd $dir_name
+# Get directory to analyze
+dir=$1
 
-    # Run FastQC
-    fastqc_files=$(ls ${dir}/*.fastq.gz)
-    fastqc $fastqc_files -t 80 -o .
-    
-    # Analyze undetermined read barcodes
+# Run FastQC
+fastqc_files=$(ls ${dir}/*.fastq.gz)
+fastqc $fastqc_files -t 80 -o .
+
+# Analyze undetermined read barcodes
+file=$(ls $dir/*_n01_undetermined.fastq.gz 2> /dev/null)
+if [ -e "$file" ]
+then
     echo "Analyzing undetermined read barcodes in: ${dir}"
-    count_barcode_frequency.py $(ls $dir/*_n01_undetermined.fastq.gz) > undetermined_barcodes.txt
-    
+    count_barcode_frequency.py "$file" > undetermined_barcodes.txt
+
     # Create and populate undetermined_barcodes_mqc.txt file
     undetermined_barcodes_mqc=undetermined_barcodes_mqc.txt
     {
@@ -37,14 +37,5 @@ do
     } > $undetermined_barcodes_mqc
 
     echo "Finished analyzing undetermined read barcodes"
+fi
 
-    # Run MultiQC
-    echo "Starting MultiQC"
-    mqc_config=$2
-    multiqc -f -c $mqc_config .
-    echo "Finished MultiQC"
-
-    # Change back to parent directory
-    cd ..
-
-done

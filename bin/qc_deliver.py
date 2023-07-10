@@ -4,9 +4,10 @@ import sys
 import os
 import requests
 import json
+import glob
 import shutil
 from slime import *
-from config import tw_api_root, tw_api_key, tw_user, delivery_folder_root, raw_run_dir_delivery_root
+from config import tw_api_root, tw_api_key, tw_user, delivery_folder_root, raw_run_dir_delivery_root, alpha
 
 
 def parse_summary(summary_report):
@@ -110,41 +111,33 @@ def deliver_data(fcid, path, lane_num, group, scheduled_date):
     delivery_dir = delivery_folder_root + group + "/" + scheduled_date + "_" + get_delivery_fcid(fcid) + "/" + lane_num
     if os.path.exists(delivery_dir):
         shutil.rmtree(delivery_dir)
-    shutil.copytree(path + "/" + lane_num, delivery_dir)
+    shutil.copytree(path, delivery_dir)
     return delivery_dir
-    
-    
-def main():
-    summary_report_path = sys.argv[1]
-    path = sys.argv[2] # path to data to for delivery
-    run_dir_path = sys.argv[3] # raw run dir path
+
+def check_qc_and_deliver(path, summary_report_path):
 
     stats = parse_summary(summary_report_path)
     success, error = check_pool_errors(stats) 
 
     if success:
-        print("Passed QC")
+        print("qc_delivery.py: Passed QC")
         summary_report_filename = os.path.basename(summary_report_path)
         fcid, lane_num = summary_report_filename.split("_")[:2]
         run = get_run_info(fcid)
         lanes = get_lanes(run["id"])["lanes"]
-        do_merge = check_do_merge(fcid)
-
-        # If do_merge, lane_num = 'merged'. Need to set lane_num = 1 to be able to get
-        # lane info from tuboweb (has to be lane number 1-4), and for update_lane_stats()
-        # (1 is the non-technical duplicate / original lane).
-        # But, need to preserve the original lane_num for the delivery and email
+        
+        # Get Lane and Pool Info
         i = lane_num
-        if do_merge:
+        if i == 'merged':
             i = 1
-    
+        
         lane = next(lane for lane in lanes if lane["lane_number"] == int(i))
         pool = get_pool(lane["id"])
 
         # Deliver Raw Run Directory if requested
         raw_run_dir_path = ''
         if run['deliver_run_dir']:
-            raw_run_dir_path = deliver_raw_run_dir(run_dir_path, pool['group']) 
+            raw_run_dir_path = deliver_raw_run_dir(get_run_dir(fcid)['run_dir'], pool['group']) 
             print("raw run dir delivered to: ", raw_run_dir_path)
             
         # Delivery Data
@@ -179,7 +172,15 @@ def main():
     else:
         message = error + "\nhttp://core-fastqc.bio.nyu.edu/" + fcid
         send_email(["mk5636@nyu.edu", "na2808@nyu.edu"], "ERROR For {}".format(fcid), message)
-        
+    
+    
+def main():
+    # qc_deliver.py <path_to_data_to_deliver> <path_to_sumary_report>
+    # ex: qc_deliver.py /path/to/lane/FCID/1 /path/to/qc/FCID/1/sumary_report.txt
+    # ex: qc_deliver.py /path/to/merged/FCID/merged path/to/qc/FCID/merged/sumary_report.txt
+    path = sys.argv[1]
+    summary_report_path = sys.argv[2]
+    check_qc_and_deliver(path, summary_report_path)
         
 if __name__ == "__main__":
     main()

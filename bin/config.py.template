@@ -4,6 +4,8 @@ tw_api_root = ""
 
 delivery_folder_root = ""
 raw_run_dir_delivery_root = ""
+raw_run_root = ""
+alpha = ""
 
 gmail_pwd = ""
 gmail_user = ""

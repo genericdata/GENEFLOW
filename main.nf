@@ -463,7 +463,8 @@ workflow qc{
 }
 
 workflow pheniqs_conf{
-    make_pheniqs_config(lanes)
+    check_no_demux(lanes)
+    make_pheniqs_config(check_no_demux.out.lane)
 }
 
 workflow {

@@ -178,7 +178,7 @@ process make_pheniqs_config {
 	no_demux == "false"
 
 	script:
-    """
+	"""
 	pheniqs_config.py \
 		$fcid \
 		$lane \
@@ -218,7 +218,7 @@ process demux_reports {
     tag "${fcid}"
 
     module "anaconda3/2020.07"
-	conda "/scratch/cgsb/gencore/mk5636/conda/slime"
+    conda "/scratch/cgsb/gencore/mk5636/conda/slime"
 
     input:
     val lanes //because data might be merged, need to wait for all lanes
@@ -484,7 +484,7 @@ workflow.onComplete {
 	}
 
 	sendMail {
-		to "mk5636@nyu.edu"
+		to ""
 		subject "${fcid} ${status}"
 
 		"""
@@ -515,7 +515,7 @@ workflow.onComplete {
 
 workflow.onError {
 	sendMail {
-		to "mk5636@nyu.edu"
+		to ""
 		subject "${fcid} Error: ${workflow.errorMessage}"
 
 		"""

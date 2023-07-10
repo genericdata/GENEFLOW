@@ -474,3 +474,58 @@ workflow {
     qc_dep = _demux.out.collect().ifEmpty(_basecall.out.lane.collect())
 	_qc(archive.out, qc_dep)
 }
+
+workflow.onComplete {
+	def status = "NA"
+	if(workflow.success) {
+		status = "SUCCESS"
+	} else {
+		status = "FAILED"
+	}
+
+	sendMail {
+		to "mk5636@nyu.edu"
+		subject "${fcid} ${status}"
+
+		"""
+		Pipeline execution summary
+		---------------------------
+		Success           : ${workflow.success}
+		exit status       : ${workflow.exitStatus}
+		Launch time       : ${workflow.start.format('dd-MMM-yyyy HH:mm:ss')}
+		Ending time       : ${workflow.complete.format('dd-MMM-yyyy HH:mm:ss')} (duration: ${workflow.duration})
+		Launch directory  : ${workflow.launchDir}
+		Work directory    : ${workflow.workDir.toUriString()}
+		Project directory : ${workflow.projectDir}
+		Run directory     : ${params.run_dir_path}
+		Script ID         : ${workflow.scriptId ?: '-'}
+		Workflow session  : ${workflow.sessionId}
+		Nextflow run name : ${workflow.runName}
+		Nextflow version  : ${workflow.nextflow.version}, build ${workflow.nextflow.build} (${workflow.nextflow.timestamp})
+		
+		Command:
+		${workflow.commandLine}
+
+		Errors:
+		Error Message:    : ${workflow.errorMessage}
+		Error Report      : ${workflow.errorReport}
+		"""
+    }
+}
+
+workflow.onError {
+	sendMail {
+		to "mk5636@nyu.edu"
+		subject "${fcid} Error: ${workflow.errorMessage}"
+
+		"""
+		Pipeline execution summary
+		---------------------------
+		Error Message:    : ${workflow.errorMessage}
+		Error Report      : ${workflow.errorReport}
+
+		Command:
+		${workflow.commandLine}
+		"""
+    }
+}

@@ -19,6 +19,44 @@ println "seq_id: $seq_id"
 println "fcid: $fcid"
 println "num_lanes: $num_lanes"
 
+process check_no_demux {
+	echo true
+
+	tag "${fcid}"
+
+	beforeScript "export PYTHONPATH=$PYTHONPATH:${workflow.projectDir}/bin"
+
+	input:
+	val lane
+
+	output:
+	tuple val(lane), env(no_demux), emit: lane
+
+	shell:
+	"""
+	no_demux=\$(python3 -c "from slime import check_demux;r=check_demux('${fcid}', ${lane});print(str(r).lower())")
+	echo "check_no_demux: lane: $lane, no_demux: \$no_demux"
+	"""
+}
+
+process check_do_merge {
+	echo true
+
+	tag "${fcid}"
+
+	beforeScript "export PYTHONPATH=$PYTHONPATH:${workflow.projectDir}/bin"
+
+	output:
+	env(do_merge), emit: do_merge
+
+	shell:
+	"""
+	do_merge=\$(python3 -c "from slime import check_do_merge;r=check_do_merge('${fcid}');print(str(r).lower())")
+	echo "check_do_merge: do_merge: \$do_merge"
+	"""
+}
+
+
 process tar {
 	//afterScript 'echo "Tar completed." | mail -s "Process Complete" your_email@example.com'
 

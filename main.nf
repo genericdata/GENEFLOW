@@ -59,7 +59,7 @@ process check_do_merge {
 
 process tar {
 	publishDir "${alpha}/logs/${fcid}/archive/tar/", mode:'copy', failOnError: true, pattern: '.command.*'
-
+  module "$PBZIP2_MODULE"
 	tag "${fcid}"
 
 	output:
@@ -70,7 +70,6 @@ process tar {
 	"""
 	# need the h flag to follow symlinks (?)
 	# tar hcvjf ${run_dir_name}.tar.bz2 ${run_dir_path}
-	module load pbzip2/1.1.13
 	tar -c ${run_dir_path} | pbzip2 -c -p${task.cpus} -m2000 > ${run_dir_name}.tar.bz2 
 	"""
 }
@@ -104,6 +103,9 @@ process _basecall {
 
 	tag "${fcid}"
 
+	module "$PICARD_MODULE"
+
+
 	input:
 	val lane
 
@@ -135,9 +137,6 @@ process _basecall {
 
 	tmp_work_dir="${tmp_dir}${fcid}/${lane}"
 	mkdir -p \$tmp_work_dir
-
-	module load $PICARD_MODULE
-	module load $JDK_MODULE
 
 	java -jar -Xmx58g \$PICARD_JAR IlluminaBasecallsToFastq \
 		LANE=${lane} \
@@ -217,7 +216,7 @@ process demux_reports {
 
     tag "${fcid}"
 
-    module "anaconda3/2020.07"
+    module "$ANACONDA_MODULE"
     conda "/scratch/cgsb/gencore/mk5636/conda/slime"
 
     input:
@@ -354,7 +353,7 @@ process multiqc {
 
     tag "${fcid}"
 
-    module "multiqc/1.9"
+    module "$MULTIQC_MODULE"
 
     input:
     tuple(val(path_to_data), path(fastqc))

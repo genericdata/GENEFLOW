@@ -107,7 +107,7 @@ def get_lib_barcodes(lib_id):
 
 
 def get_run_dir(fcid):
-    query = f"{raw_run_root}*/*{fcid}"
+    query = f"{raw_run_root}/*/*{fcid}"
     print("Locating run dir: ", query)
     run_dir = glob.glob(os.path.join(query))
     

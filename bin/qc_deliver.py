@@ -121,10 +121,12 @@ def check_qc_and_deliver(path, summary_report_path):
     success = result.get("success")
     error = result.get("message")
 
+    summary_report_filename = os.path.basename(summary_report_path)
+    fcid, lane_num = summary_report_filename.split("_")[:2]
+
     if success:
         print("qc_delivery.py: Passed QC")
-        summary_report_filename = os.path.basename(summary_report_path)
-        fcid, lane_num = summary_report_filename.split("_")[:2]
+        
         run = get_run_info(fcid)
         lanes = get_lanes(run["id"])["lanes"]
         
@@ -172,6 +174,8 @@ def check_qc_and_deliver(path, summary_report_path):
         print("run status updated in tuboweb")
 
     else:
+        print("SUCCESS: ", success)
+        print("ERROR: ", error)
         message = error + "\nhttp://core-fastqc.bio.nyu.edu/" + fcid
         send_email(["mk5636@nyu.edu", "na2808@nyu.edu"], "ERROR For {}".format(fcid), message)
     

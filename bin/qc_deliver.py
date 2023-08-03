@@ -117,7 +117,9 @@ def deliver_data(fcid, path, lane_num, group, scheduled_date):
 def check_qc_and_deliver(path, summary_report_path):
 
     stats = parse_summary(summary_report_path)
-    success, error = check_pool_errors(stats) 
+    result = check_pool_errors(stats)
+    success = result.get("success")
+    error = result.get("message")
 
     if success:
         print("qc_delivery.py: Passed QC")

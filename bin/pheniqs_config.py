@@ -113,7 +113,7 @@ for l in libs:
     ## it is, that refers to the index which was encoded first or second. We know
     ## that if you need to reverse complement any barcode, it's the one on Index 2,
     ## regardless of what order it was encoded in TuboWeb.  
-    barcode_sequences = [reverse_compliment(bc['barcode_sequence'].upper())
+    barcode_sequences = [reverse_complement(bc['barcode_sequence'].upper())
                          if any(b['revcom'] is True for b in pool['reverse_complement']) and bc['barcode_location'] == 3
                          else bc['barcode_sequence'].upper()
                          for bc in sorted(barcodes, key=itemgetter('barcode_location'))]

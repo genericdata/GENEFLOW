@@ -59,7 +59,7 @@ process check_do_merge {
 
 process tar {
 	publishDir "${alpha}/logs/${fcid}/archive/tar/", mode:'copy', failOnError: true, pattern: '.command.*'
-  module "$PBZIP2_MODULE"
+  	module "$PBZIP2_MODULE"
 	tag "${fcid}"
 
 	output:
@@ -193,6 +193,7 @@ process run_pheniqs {
 
 	tag "${fcid}"
 
+	module "$PHENIQS_MODULE"
 	input:
 	tuple(val(lane), file(pheniqs_conf))
 
@@ -203,7 +204,6 @@ process run_pheniqs {
 
 	shell
 	"""
-	module load $PHENIQS_MODULE
 	rm -rf ${alpha}/sample/${fcid}/${lane}/*
 	pheniqs demux -C $pheniqs_conf > 'demux.out'
 	"""

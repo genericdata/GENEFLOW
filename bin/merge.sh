@@ -25,7 +25,7 @@ else
     folderType="sample"
 fi
 
-path="${alpha}/${folderType}/default/${fcid}"
+path="${alpha}/${folderType}/${fcid}"
 out_dir="${alpha}/merged/${fcid}/merged"
 
 # Ensure output directory exists

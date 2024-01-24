@@ -108,7 +108,7 @@ def deliver_raw_run_dir(run_dir_path, group):
 
 
 def deliver_data(fcid, path, lane_num, group, scheduled_date):
-    delivery_dir = delivery_folder_root + group + "/" + scheduled_date + "_" + get_delivery_fcid(fcid) + "/" + lane_num
+    delivery_dir = delivery_folder_root + "/" + group + "/" + scheduled_date + "_" + get_delivery_fcid(fcid) + "/" + lane_num
     if os.path.exists(delivery_dir):
         shutil.rmtree(delivery_dir)
     shutil.copytree(path, delivery_dir)
@@ -124,10 +124,11 @@ def check_qc_and_deliver(path, summary_report_path):
     summary_report_filename = os.path.basename(summary_report_path)
     fcid, lane_num = summary_report_filename.split("_")[:2]
 
+    run = get_run_info(fcid)
+
     if success:
         print("qc_delivery.py: Passed QC")
         
-        run = get_run_info(fcid)
         lanes = get_lanes(run["id"])["lanes"]
         
         # Get Lane and Pool Info
@@ -154,15 +155,6 @@ def check_qc_and_deliver(path, summary_report_path):
         mqc_report_url = "http://core-fastqc.bio.nyu.edu/{}/{}/multiqc_report.html".format(fcid, lane_num)
         delivery_email = get_delivery_email(fcid, delivery_dir, raw_run_dir_path, mqc_report_url, message)
         
-        # send email
-        pool_owner_email = f"{pool['created_by']}@nyu.edu"
-        pi_email = f"{pool['pi_netid']}@nyu.edu" if pool['pi_netid'] else ''
-        #recipients = ['mk5636@nyu.edu', 'gencore-group@nyu.edu', pool_owner_email] + ([pi_email] if pi_email else [])
-        recipients = ['mk5636@nyu.edu']
-        subject = "Data For " + fcid
-        send_email(recipients, subject, delivery_email)
-        print("email sent to: ", recipients)
-        
         # update lane stats in tuboweb
         update_lane_stats(fcid, i, 'total_num_reads', stats["Total # of Single-End Reads"])
         update_lane_stats(fcid, i, 'total_num_pf_reads', stats["Total # PF Reads"])
@@ -173,12 +165,31 @@ def check_qc_and_deliver(path, summary_report_path):
         print(r)
         print("run status updated in tuboweb")
 
+        # send email
+        pool_owner_email = f"{pool['created_by']}@nyu.edu"
+        pi_email = f"{pool['pi_netid']}@nyu.edu" if pool['pi_netid'] else ''
+        #recipients = ['mk5636@nyu.edu', 'gencore-group@nyu.edu', pool_owner_email] + ([pi_email] if pi_email else [])
+        recipients = ['mk5636@nyu.edu']
+        subject = "Data For " + fcid
+        send_email(recipients, subject, delivery_email)
+        print("email sent to: ", recipients)
+
     else:
-        print("SUCCESS: ", success)
-        print("ERROR: ", error)
-        message = error + "\nhttp://core-fastqc.bio.nyu.edu/" + fcid
-        send_email(["mk5636@nyu.edu", "na2808@nyu.edu"], "ERROR For {}".format(fcid), message)
-    
+        message = ''
+        sequencer_name = run['sequencer']['name']
+        if run['is_revcom_index2'] and ('NextSeq' in sequencer_name or 'NovaSeq' in sequencer_name):
+            first_demux_undetermined_pct = get_first_demux_undetermined_pct(fcid, 2)
+            if first_demux_undetermined_pct is None:
+                set_first_demux_undetermined_pct(fcid, 2, stats["% Undetermined"])
+                flip_index2_revcom(fcid)
+                run_redemux(fcid)
+                message = "Resubmitted for demultiplexing. Undetermined after Demultiplex Attempt 1 = {}%".format(stats["% Undetermined"])
+            else:
+                message = "Undetermined\nDemultiplex Attempt 1 = {}%\nDemultiplex Attempt 2 = {}%".format(first_demux_undetermined_pct, stats["% Undetermined"])
+        else:
+            message = error + "\nNo Auto Redemultiplexing\nhttp://core-fastqc.bio.nyu.edu/" + fcid
+
+        send_email(["mk5636@nyu.edu"], "ERROR For {}".format(fcid), message)
     
 def main():
     # qc_deliver.py <path_to_data_to_deliver> <path_to_sumary_report>

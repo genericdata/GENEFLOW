@@ -14,7 +14,7 @@ from config import tw_api_root, tw_user, tw_api_key, gmail_user, gmail_pwd, raw_
 def send_email(recipient, subject, body):
     FROM = gmail_user
     TO = recipient if isinstance(recipient, list) else [recipient]
-    SUBJECT = "SLIME: " + subject
+    SUBJECT = "GENEFLOW: " + subject
     TEXT = body
 
     # Prepare actual message
@@ -152,3 +152,78 @@ def reverse_complement(seq):
     complement = {'A': 'T', 'T': 'A', 'C': 'G', 'G': 'C'}
     reverse_complement = ''.join(complement[base] for base in reversed(seq))
     return reverse_complement
+
+
+def set_first_demux_undetermined_pct(fcid, num, val):
+    url = f"{tw_api_root}flowcell/illumina/{fcid}/set_first_demux_undetermined_pct/{num}"
+    params = {"username": tw_user, "api_key": tw_api_key, "value": val}
+    response = requests.get(url, params=params)
+    data = response.json()
+    return data
+    
+    
+def get_first_demux_undetermined_pct(fcid, num):
+    url = f"{tw_api_root}flowcell/illumina/{fcid}/get_first_demux_undetermined_pct/{num}"
+    params = {"username": tw_user, "api_key": tw_api_key}
+    response = requests.get(url, params=params)
+    data = response.json()
+    return data
+
+def run_redemux(fcid):
+    # Define the base command and parameters
+    root_log_dir = alpha + "/logs/"
+    
+    base_cmd = 'sbatch'
+    output_cmd = f"--output={root_log_dir}/{fcid}/pipeline/slurm-%j-redemux.out"
+    error_cmd = f"--error={root_log_dir}/{fcid}/pipeline/slurm-%j-redemux.err"
+    job_name_cmd = f"--job-name=GENEFLOW_MANAGER_({fcid})_redemux"
+    
+    # Find the run directory
+    find_cmd = f"find -maxdepth 2 -type d -name '*{fcid}'"
+    rundir_cmd = f"rundir=$({find_cmd}); echo rundir = $rundir;"
+    
+    # Construct the launch command with the found run directory
+    # TODO: make path to launch.sh a param in the config?
+    launch_cmd = f"/home/gencore/SCRIPTS/GENEFLOW/launch.sh /scratch/gencore/sequencers/$rundir {fcid} demux"
+    
+    # Combine the commands
+    full_cmd = f"{rundir_cmd} {base_cmd} {output_cmd} {error_cmd} {job_name_cmd} {launch_cmd}"
+    
+    # Execute the command and get the output
+    demux_output = subprocess.getoutput(full_cmd)
+    
+    # Format and print the output
+    formatted_output = f"\n{full_cmd}\n{demux_output}\n"
+    print(f"Auto-Redemuxing\n{formatted_output}")
+    
+    
+def set_pool_index_revcom(pool_id, i):
+    url = f"{tw_api_root}librarypool/{pool_id}/setindexisrevcom/{i}/"
+    params = {"username": tw_user, "api_key": tw_api_key}
+    response = requests.get(url, params=params)
+    data = response.json()
+    return data
+
+
+def set_run_index_revcom(fcid, status):
+    url = f"{tw_api_root}flowcell/illumina/{fcid}/setindexisrevcom/{status}"
+    params = {"username": tw_user, "api_key": tw_api_key}
+    response = requests.get(url, params=params)
+    data = response.json()
+    return data
+
+
+def flip_index2_revcom(fcid):
+    """
+    Turn on/off revcom for index 2 for the run and all pools.
+    Right now we just turn off, but we can set this to be a parameter
+    or to toggle it based on the current state.
+    """
+    run = get_run_info(fcid)
+    lanes = get_lanes(run['id'])
+    for lane in lanes:
+        pool = get_pool(lane['pool']['id'])
+        # turn off revcom for index 2 for all pools
+        set_pool_index_revcom(pool, 0)
+    # turn off revcom for index 2 for the run
+    set_run_index_revcom(fcid, 0)

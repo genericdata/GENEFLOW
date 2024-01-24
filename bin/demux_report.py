@@ -83,6 +83,8 @@ def generate_reports(fcid):
         if not no_demux:
             pheniqs_out = get_pheniqs_output(fcid, lane)
             lanes_dict[lane].update(parse_pheniqs_output(pheniqs_out))
+        else:
+            lanes_dict[lane]["lane_read_count_total_filtered"] = total_num_reads[lane]
 
     do_merge = check_do_merge(fcid)
     prepare_demux_reports(lanes_dict, do_merge, fcid)
@@ -133,9 +135,9 @@ def create_summary_report(
 def prepare_summary_reports(lanes_dict, do_merge, fcid, phix_aligned_per_lane,total_pf_reads):
     if do_merge:
         path = "merged/{}_merged_summary_mqc.txt".format(fcid)
-        fc_read_count = get_flowcell_read_count(lanes_dict)
+        no_demux = check_demux(fcid, 1)        
+        fc_read_count = get_flowcell_read_count(lanes_dict, no_demux)
         phix_aligned = sum(phix_aligned_per_lane.values()) / len(phix_aligned_per_lane)
-        no_demux = check_demux(fcid, 1)
         report = create_summary_report(
             "Number of Lanes",
             len(lanes_dict),
@@ -201,21 +203,26 @@ def write_report(report, path):
     print("Wrote report: {}".format(path))
 
 
-def get_flowcell_read_count(lanes):
+def get_flowcell_read_count(lanes, no_demux):
     fc_read_count_total_unfiltered = 0
     fc_read_count_total_filtered = 0
     fc_undetermined = 0
     for l in sorted(lanes):
         fc_read_count_total_unfiltered += lanes[l]["lane_read_count_total_unfiltered"]
         fc_read_count_total_filtered += lanes[l]["lane_read_count_total_filtered"]
-        fc_undetermined += lanes[l]["undetermined"]
+        if not no_demux:
+            fc_undetermined += lanes[l]["undetermined"]
     fc_undetermined = round((fc_undetermined / len(lanes)), 2)
 
-    return {
+    fc_read_count_dict = {
         "total_unfiltered": fc_read_count_total_unfiltered,
-        "total_filtered": fc_read_count_total_filtered,
-        "undetermined": fc_undetermined,
+        "total_filtered": fc_read_count_total_filtered
     }
+
+    if not no_demux:
+        fc_read_count_dict['undetermined'] = fc_undetermined
+
+    return fc_read_count_dict
 
 
 def parse_pheniqs_output(report):

@@ -227,3 +227,18 @@ def flip_index2_revcom(fcid):
         set_pool_index_revcom(pool, 0)
     # turn off revcom for index 2 for the run
     set_run_index_revcom(fcid, 0)
+
+def change_permissions_recursive(path, mode):
+    # Change the directory's own permissions
+    os.chmod(path, mode)
+
+    # Traverse all files and directories inside the given directory
+    for root, dirs, files in os.walk(path):
+        for dir in dirs:
+            # Change permissions for each directory
+            os.chmod(os.path.join(root, dir), mode)
+
+        for file in files:
+            # Change permissions for each file
+            os.chmod(os.path.join(root, file), mode)
+

@@ -104,6 +104,8 @@ def deliver_raw_run_dir(run_dir_path, group):
         return run_dir_user_path
     
     shutil.copytree(run_dir_path, raw_run_delivery_folder)
+    mode = 0o555 # This is the octal representation for r-xr-xr-x
+    change_permissions_recursive(raw_run_delivery_folder, mode)
     return run_dir_user_path
 
 
@@ -112,6 +114,8 @@ def deliver_data(fcid, path, lane_num, group, scheduled_date):
     if os.path.exists(delivery_dir):
         shutil.rmtree(delivery_dir)
     shutil.copytree(path, delivery_dir)
+    mode = 0o555 # This is the octal representation for r-xr-xr-x
+    change_permissions_recursive(delivery_dir, mode)
     return delivery_dir
 
 def check_qc_and_deliver(path, summary_report_path):
@@ -168,8 +172,8 @@ def check_qc_and_deliver(path, summary_report_path):
         # send email
         pool_owner_email = f"{pool['created_by']}@nyu.edu"
         pi_email = f"{pool['pi_netid']}@nyu.edu" if pool['pi_netid'] else ''
-        #recipients = ['mk5636@nyu.edu', 'gencore-group@nyu.edu', pool_owner_email] + ([pi_email] if pi_email else [])
-        recipients = ['mk5636@nyu.edu']
+        recipients = ['mk5636@nyu.edu', 'gencore-group@nyu.edu', pool_owner_email] + ([pi_email] if pi_email else [])
+        #recipients = ['mk5636@nyu.edu']
         subject = "Data For " + fcid
         send_email(recipients, subject, delivery_email)
         print("email sent to: ", recipients)

@@ -183,7 +183,7 @@ process make_pheniqs_config {
 	pheniqs_config.py \
 		$fcid \
 		$lane \
-		${task.cpus}
+		20
 	"""
 }
 

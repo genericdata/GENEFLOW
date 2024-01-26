@@ -59,8 +59,10 @@ process check_do_merge {
 
 process tar {
 	publishDir "${alpha}/logs/${fcid}/archive/tar/", mode:'copy', failOnError: true, pattern: '.command.*'
-  	module "$PBZIP2_MODULE"
+
 	tag "${fcid}"
+
+  module params.PBZIP2_MODULE
 
 	output:
 	path("*.tar.bz2"), emit: file
@@ -103,8 +105,8 @@ process _basecall {
 
 	tag "${fcid}"
 
-	module "$PICARD_MODULE"
-
+  module params.PICARD_MODULE
+  module params.JDK_MODULE
 
 	input:
 	val lane
@@ -193,7 +195,8 @@ process run_pheniqs {
 
 	tag "${fcid}"
 
-	module "$PHENIQS_MODULE"
+  module params.PHENIQS_MODULE
+
 	input:
 	tuple(val(lane), file(pheniqs_conf))
 
@@ -216,8 +219,8 @@ process demux_reports {
 
     tag "${fcid}"
 
-    module "$ANACONDA_MODULE"
-    conda "/scratch/cgsb/gencore/mk5636/conda/slime"
+    module params.ANACONDA_MODULE
+    conda params.conda_path
 
     input:
     val lanes //because data might be merged, need to wait for all lanes
@@ -353,7 +356,7 @@ process multiqc {
 
     tag "${fcid}"
 
-    module "$MULTIQC_MODULE"
+    module params.MULTIQC_MODULE
 
     input:
     tuple(val(path_to_data), path(fastqc))
@@ -484,7 +487,7 @@ workflow.onComplete {
 	}
 
 	sendMail {
-		to ""
+		to ${params.admin_email}
 		subject "${fcid} ${status}"
 
 		"""
@@ -515,7 +518,7 @@ workflow.onComplete {
 
 workflow.onError {
 	sendMail {
-		to ""
+		to ${params.admin_email}
 		subject "${fcid} Error: ${workflow.errorMessage}"
 
 		"""

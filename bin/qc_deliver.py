@@ -6,6 +6,7 @@ import requests
 import json
 import glob
 import shutil
+import subprocess
 from slime import *
 from config import tw_api_root, tw_api_key, tw_user, delivery_folder_root, raw_run_dir_delivery_root, alpha
 
@@ -103,19 +104,21 @@ def deliver_raw_run_dir(run_dir_path, group):
     if os.path.exists(raw_run_delivery_folder):
         return run_dir_user_path
     
-    shutil.copytree(run_dir_path, raw_run_delivery_folder)
-    mode = 0o555 # This is the octal representation for r-xr-xr-x
-    change_permissions_recursive(raw_run_delivery_folder, mode)
+    #shutil.copytree(run_dir_path, raw_run_delivery_folder)
+    #mode = 0o555 # This is the octal representation for r-xr-xr-x
+    #change_permissions_recursive(raw_run_delivery_folder, mode)
+    copy_command = subprocess.getoutput('mkdir -p {}; cp -rv {}/* {}/.'.format(raw_run_delivery_folder, run_dir_path, raw_run_delivery_folder))
     return run_dir_user_path
 
 
 def deliver_data(fcid, path, lane_num, group, scheduled_date):
     delivery_dir = delivery_folder_root + "/" + group + "/" + scheduled_date + "_" + get_delivery_fcid(fcid) + "/" + lane_num
-    if os.path.exists(delivery_dir):
-        shutil.rmtree(delivery_dir)
-    shutil.copytree(path, delivery_dir)
-    mode = 0o555 # This is the octal representation for r-xr-xr-x
-    change_permissions_recursive(delivery_dir, mode)
+    #if os.path.exists(delivery_dir):
+    #    shutil.rmtree(delivery_dir)
+    #shutil.copytree(path, delivery_dir)
+    #mode = 0o555 # This is the octal representation for r-xr-xr-x
+    #change_permissions_recursive(delivery_dir, mode)
+    copy_command = subprocess.getoutput('mkdir -p {}; rm -f {}/*; cp -v {}/* {}/.'.format(delivery_dir, delivery_dir, path, delivery_dir))
     return delivery_dir
 
 def check_qc_and_deliver(path, summary_report_path):

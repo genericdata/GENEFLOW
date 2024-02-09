@@ -49,11 +49,11 @@ def get_qc_messages(stats):
 
 def set_run_status(fcid, status):
     url = f"{tw_api_root}flowcell/illumina/{fcid}/status/{status}"
-    headers = {
+    params = {
         'username': tw_user,
         'api_key': tw_api_key
     }
-    response = requests.get(url, headers=headers)
+    response = requests.get(url, params=params)
     return response.json()
 
 

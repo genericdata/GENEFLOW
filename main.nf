@@ -487,7 +487,7 @@ workflow.onComplete {
 	}
 
 	sendMail {
-		to ${params.admin_email}
+		to "${params.admin_email}"
 		subject "${fcid} ${status}"
 
 		"""
@@ -518,7 +518,7 @@ workflow.onComplete {
 
 workflow.onError {
 	sendMail {
-		to ${params.admin_email}
+		to "${params.admin_email}"
 		subject "${fcid} Error: ${workflow.errorMessage}"
 
 		"""

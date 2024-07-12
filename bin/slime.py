@@ -6,6 +6,8 @@ import requests
 import json
 import glob
 import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from xml.dom import minidom
 from shutil import copyfile, copytree
 from config import tw_api_root, tw_user, tw_api_key, gmail_user, gmail_pwd, raw_run_root
@@ -17,15 +19,21 @@ def send_email(recipient, subject, body):
     SUBJECT = "GENEFLOW: " + subject
     TEXT = body
 
-    # Prepare actual message
-    message = f"""From: {FROM}\nTo: {", ".join(TO)}\nSubject: {SUBJECT}\n\n{TEXT}"""
+    # Create the email message
+    msg = MIMEMultipart('alternative')
+    msg['From'] = FROM
+    msg['To'] = ", ".join(TO)
+    msg['Subject'] = SUBJECT
 
+    # Attach the email content, encoded in UTF-8
+    msg.attach(MIMEText(TEXT, 'html', 'utf-8'))
+    
     try:
         with smtplib.SMTP("smtp.gmail.com", 587) as server:
             server.ehlo()
             server.starttls()
             server.login(gmail_user, gmail_pwd)
-            server.sendmail(FROM, TO, message)
+            server.sendmail(FROM, TO, msg.as_string())
 
     except Exception as e:
         print("Failed to send email:", str(e))

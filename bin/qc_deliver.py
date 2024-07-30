@@ -37,13 +37,13 @@ def get_qc_messages(stats):
     message = ""
     if ("% PhiX Aligned" in stats and stats["% PhiX Aligned"] > 15) \
         or stats["Total # PF Reads"] / stats["Total # of Single-End Reads"] < 0.60:
-        message += "\nUnfortunately, your lane(s) received less reads than expected. This is likely related to an issue with metadata, quantification and/or pooling. We would be happy to discuss this further if desired.\n"
+        message += "<br>Unfortunately, your lane(s) received less reads than expected. This is likely related to an issue with metadata, quantification and/or pooling. We would be happy to discuss this further if desired.<br>"
 
     if (
         "% Undetermined" in stats
         and stats["% Undetermined"] - stats["% PhiX Aligned"] > 15
     ):
-        message += "\nThere is a large number of 'undetermined reads' in your lane(s), those whose index cannot be appropriately identified as any of the ones expected for the libraries. This is likely related to an issue with metadata, pooling, and/or library prep. We would be happy to discuss this further if desired. \n"
+        message += "<br>There is a large number of 'undetermined reads' in your lane(s), those whose index cannot be appropriately identified as any of the ones expected for the libraries. This is likely related to an issue with metadata, pooling, and/or library prep. We would be happy to discuss this further if desired. <br>"
 
     return message
 
@@ -73,33 +73,50 @@ def update_lane_stats(name, lane_num, stat_name, stat_value):
     return {'success': True, 'msg': ''}
 
 
-def get_delivery_email(fcid, delivery_dir, run_dir_user_path, mqc_report_url, message):
-    delivery_template = f'''
-Dear GenCore Users,
-
-Results for your recently completed sequencing run on flowcell {fcid} are available here:
-{delivery_dir}
-{run_dir_user_path}
-All sequencing run and library statistics can be viewed in the interactive MultiQC report here:
-{mqc_report_url}
-{message}
-Please let us know if you have any questions.
-
-Best,
-GenCore Team
-
----
-Note: You must have the required permissions to access data on the HPC. 
-If this is your first time sequencing, please visit: https://gencore.bio.nyu.edu/bioinformatics/getting-started/
-    '''
+def get_delivery_email(fcid, delivery_dir, run_dir_user_path, mqc_report_url, message, no_demux, allowed_barcode_mismatch):
+    demux_text = f"Following basecalling, the reads were demultiplexed using Pheniqs version 1.1.0<sup>2</sup>, allowing for {allowed_barcode_mismatch} mismatch{'es' if allowed_barcode_mismatch > 1 else ''} in sample index sequences." if not no_demux else ""
     
-    return delivery_template
+    delivery_template = f'''
+<p>Dear GenCore Users,</p>
 
+<p>Your data has been successfully processed by the <a href="https://github.com/gencorefacility/GENEFLOW">GENEFLOW</a> pipeline.</p>
+
+<p>We are providing a suggested methods section for your publications:</p>
+
+<p>The reads were basecalled using Picard IlluminaBasecallsToFastq version 2.23.8<sup>1</sup>, with APPLY_EAMSS_FILTER set to false. {demux_text} The entire process was executed using a custom nextflow pipeline, GENEFLOW<sup>3</sup>.</p>
+
+<p>References</p>
+
+<ol>
+    <li>"Picard Toolkit.” 2019. Broad Institute, GitHub Repository. <a href="https://broadinstitute.github.io/picard/">https://broadinstitute.github.io/picard/</a>; Broad Institute.</li>
+    <li>Galanti, L., Shasha, D. & Gunsalus, K.C. Pheniqs 2.0: accurate, high-performance Bayesian decoding and confidence estimation for combinatorial barcode indexing. BMC Bioinformatics 22, 359 (2021). <a href="https://doi.org/10.1186/s12859-021-04267-5">https://doi.org/10.1186/s12859-021-04267-5</a>.</li>
+    <li>"GENEFLOW." 2023. New York University Center for Genomics and System Biology Genomics Core, GitHub Repository. <a href="https://github.com/gencorefacility/GENEFLOW">https://github.com/gencorefacility/GENEFLOW</a>; New York University.</li>
+</ol>
+
+<p>We kindly request that you include the following acknowledgements in your publications if this data contributed to your research:</p>
+<p>This work was supported in part through the NYU IT High Performance Computing resources, services, and staff expertise. We acknowledge the Zegar Family Foundation for their generous support. We thank the NYU Center for Genomics and System Biology Genomics Core for their assistance and resources.</p>
+
+<p>You must have the required permissions to access data on the HPC. If this is your first time sequencing, please visit: <a href="https://gencore.bio.nyu.edu/bioinformatics/getting-started/">https://gencore.bio.nyu.edu/bioinformatics/getting-started/</a></p>
+
+<p>Results for your recently completed sequencing run on flowcell {fcid} are available here:<br>
+{delivery_dir}<br>
+{run_dir_user_path}</p>
+
+<p>All sequencing run and library statistics can be viewed in the interactive MultiQC report here:<br>
+<a href="{mqc_report_url}">{mqc_report_url}</a><br>
+{message}</p>
+
+<p>Please let us know if you have any questions.</p>
+
+<p>Best,<br>
+GenCore Team</p>
+    '''    
+    return delivery_template
 
 def deliver_raw_run_dir(run_dir_path, group):
     run_dir_name = os.path.basename(os.path.normpath(run_dir_path))
     raw_run_delivery_folder = raw_run_dir_delivery_root + group + "/" + run_dir_name
-    run_dir_user_path = "\nRaw Run Directory:\n{}\n".format(raw_run_delivery_folder)
+    run_dir_user_path = "<br>Raw Run Directory:<br>{}<br>".format(raw_run_delivery_folder)
     
     if os.path.exists(raw_run_delivery_folder):
         return run_dir_user_path
@@ -160,7 +177,7 @@ def check_qc_and_deliver(path, summary_report_path):
         # get delivery email
         message = get_qc_messages(stats)
         mqc_report_url = "http://core-fastqc.bio.nyu.edu/{}/{}/multiqc_report.html".format(fcid, lane_num)
-        delivery_email = get_delivery_email(fcid, delivery_dir, raw_run_dir_path, mqc_report_url, message)
+        delivery_email = get_delivery_email(fcid, delivery_dir, raw_run_dir_path, mqc_report_url, message, pool['no_demux'], pool['allowed_barcode_mismatch'])
         
         # update lane stats in tuboweb
         update_lane_stats(fcid, i, 'total_num_reads', stats["Total # of Single-End Reads"])

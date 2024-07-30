@@ -46,6 +46,9 @@ process check_do_merge {
 
 	beforeScript "export PYTHONPATH=$PYTHONPATH:${workflow.projectDir}/bin"
 
+  input:
+  val qc_dep // not actually used in this process, but need to wait for this before starting
+
 	output:
 	env(do_merge), emit: do_merge
 
@@ -428,7 +431,7 @@ workflow _qc{
         qc_dep
     main:
         demux_reports(qc_dep)
-	check_do_merge()
+	check_do_merge(qc_dep)
         do_merge = check_do_merge.out.do_merge
         merge_lanes(qc_dep, do_merge)
 	get_lane_paths(do_merge)

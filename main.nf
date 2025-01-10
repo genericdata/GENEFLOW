@@ -182,12 +182,23 @@ process make_pheniqs_config {
 	no_demux == "false"
 
 	script:
-	"""
-	pheniqs_config.py \
-		$fcid \
-		$lane \
-		20
-	"""
+    if( params.pheniqs_version == '1' )
+	    """
+	    pheniqs_config.py \
+		    $fcid \
+		    $lane \
+		    20
+	    """
+
+    else if( params.pheniqs_version == '2' )
+      """
+      pheniqs_config_v2.py \
+        $fcid \
+        $lane \
+        20
+      """
+    else
+      error "Invalid params.pheniqs_version : ${params.pheniqs_version}"
 }
 
 process run_pheniqs {
@@ -198,8 +209,6 @@ process run_pheniqs {
 
 	tag "${fcid}"
 
-  module params.PHENIQS_MODULE
-
 	input:
 	tuple(val(lane), file(pheniqs_conf))
 
@@ -208,11 +217,22 @@ process run_pheniqs {
 	path("demux.out")
 	path(".command.*")
 
-	shell
-	"""
-	rm -rf ${alpha}/sample/${fcid}/${lane}/*
-	pheniqs demux -C $pheniqs_conf > 'demux.out'
-	"""
+  script:
+    if( params.pheniqs_version == '1' )
+        """
+        module load ${params.PHENIQS1_MODULE}
+        rm -rf ${alpha}/sample/${fcid}/${lane}/*
+        pheniqs demux -C $pheniqs_conf > 'demux.out'
+        """
+
+    else if( params.pheniqs_version == '2' )
+        """
+        module load ${params.PHENIQS2_MODULE}
+        rm -rf ${alpha}/sample/${fcid}/${lane}/*
+        pheniqs mux -c $pheniqs_conf &> 'demux.out'
+        """
+    else
+        error "Invalid params.pheniqs_version : ${params.pheniqs_version}"
 }
 
 process demux_reports {
@@ -233,10 +253,20 @@ process demux_reports {
     path('*/*_mqc.txt'), emit: reports
     path(".command.*")
 
-    shell:
-    """
-    demux_report.py $fcid
-    """
+    beforeScript "export PATH=/home/gencore/venvs/geneflow:$PATH"
+
+    script:
+    if( params.pheniqs_version == '1' )
+        """
+        demux_report.py $fcid
+        """
+
+    else if( params.pheniqs_version == '2' )
+        """
+        demux_report_v2.py $fcid
+        """
+    else
+        error "Invalid params.pheniqs_version : ${params.pheniqs_version}"
 }
 
 process merge_lanes {

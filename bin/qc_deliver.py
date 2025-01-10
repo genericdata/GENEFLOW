@@ -74,7 +74,7 @@ def update_lane_stats(name, lane_num, stat_name, stat_value):
 
 
 def get_delivery_email(fcid, delivery_dir, run_dir_user_path, mqc_report_url, message, no_demux, allowed_barcode_mismatch):
-    demux_text = f"Following basecalling, the reads were demultiplexed using Pheniqs version 1.1.0<sup>2</sup>, allowing for {allowed_barcode_mismatch} mismatch{'es' if allowed_barcode_mismatch > 1 else ''} in sample index sequences." if not no_demux else ""
+    demux_text = f"Following basecalling, the reads were demultiplexed using Pheniqs version 2.1.0<sup>2</sup>, allowing for {allowed_barcode_mismatch} mismatch{'es' if allowed_barcode_mismatch > 1 else ''} in sample index sequences." if not no_demux else ""
     
     delivery_template = f'''
 <p>Dear GenCore Users,</p>
@@ -97,12 +97,12 @@ def get_delivery_email(fcid, delivery_dir, run_dir_user_path, mqc_report_url, me
 <p>This work was supported in part through the NYU IT High Performance Computing resources, services, and staff expertise. We acknowledge the Zegar Family Foundation for their generous support. We thank the NYU Center for Genomics and System Biology Genomics Core for their assistance and resources.</p>
 
 <p>You must have the required permissions to access data on the HPC. If this is your first time sequencing, please visit: <a href="https://gencore.bio.nyu.edu/bioinformatics/getting-started/">https://gencore.bio.nyu.edu/bioinformatics/getting-started/</a></p>
-
-<p>Results for your recently completed sequencing run on flowcell {fcid} are available here:<br>
+<hr>
+<p><b>Results for your recently completed sequencing run on flowcell {fcid} are available here:</b><br>
 {delivery_dir}<br>
 {run_dir_user_path}</p>
 
-<p>All sequencing run and library statistics can be viewed in the interactive MultiQC report here:<br>
+<p><b>All sequencing run and library statistics can be viewed in the interactive MultiQC report here:</b><br>
 <a href="{mqc_report_url}">{mqc_report_url}</a><br>
 {message}</p>
 

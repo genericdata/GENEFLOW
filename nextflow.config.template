@@ -1,5 +1,6 @@
 // Run Directory Path
 params.run_dir_path = ""
+params.pheniqs_version = "2"
 
 // Global Configuration
 env.alpha = ""

@@ -201,14 +201,20 @@ def check_qc_and_deliver(path, summary_report_path):
     else:
         message = ''
         sequencer_name = run['sequencer']['name']
-        if run['is_revcom_index2'] and ('NextSeq' in sequencer_name or 'NovaSeq' in sequencer_name):
-            first_demux_undetermined_pct = get_first_demux_undetermined_pct(fcid, 2)
+        first_demux_undetermined_pct = get_first_demux_undetermined_pct(fcid, 1)
+        if (run['is_revcom_index2'] or first_demux_undetermined_pct is not None) \
+            and ('NextSeq' in sequencer_name or 'NovaSeq' in sequencer_name):
             if first_demux_undetermined_pct is None:
-                set_first_demux_undetermined_pct(fcid, 2, stats["% Undetermined"])
+                send_email(["mk5636@nyu.edu"], "ERROR For {}".format(fcid), 'first_demux_undetermined_pct is None') 
+                print("first_demux_undetermined_pct is None")
+                set_first_demux_undetermined_pct(fcid, 1, stats["% Undetermined"])
                 flip_index2_revcom(fcid)
                 run_redemux(fcid)
                 message = "Resubmitted for demultiplexing. Undetermined after Demultiplex Attempt 1 = {}%".format(stats["% Undetermined"])
+                send_email(["mk5636@nyu.edu"], "ERROR For {}".format(fcid), message)
             else:
+                send_email(["mk5636@nyu.edu"], "ERROR For {}".format(fcid), "first_demux_undetermined_pct is not None it's: " + str(first_demux_undetermined_pct))
+                print("first_demux_undetermined_pct is not None it's: " + str(first_demux_undetermined_pct))
                 message = "Undetermined\nDemultiplex Attempt 1 = {}%\nDemultiplex Attempt 2 = {}%".format(first_demux_undetermined_pct, stats["% Undetermined"])
         else:
             message = error + "\nNo Auto Redemultiplexing\nhttp://core-fastqc.bio.nyu.edu/" + fcid

@@ -41,7 +41,7 @@ pheniqs_conf = {
     "flowcell id": fcid,
     "flowcell lane number": int(lane_num),
     "threads": int(cpus),
-    "sample": {"algorithm": "pamld", "codec": {}, "transform": {}},
+    "sample": {"algorithm": "mdd", "codec": {}, "transform": {}},
     "input": [],
     "template": {"transform": {}}
 }

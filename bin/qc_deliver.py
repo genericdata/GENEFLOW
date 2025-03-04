@@ -73,8 +73,11 @@ def update_lane_stats(name, lane_num, stat_name, stat_value):
     return {'success': True, 'msg': ''}
 
 
-def get_delivery_email(fcid, delivery_dir, run_dir_user_path, mqc_report_url, message, no_demux, allowed_barcode_mismatch):
-    demux_text = f"Following basecalling, the reads were demultiplexed using Pheniqs version 2.1.0<sup>2</sup>, allowing for {allowed_barcode_mismatch} mismatch{'es' if allowed_barcode_mismatch > 1 else ''} in sample index sequences." if not no_demux else ""
+def get_delivery_email(fcid, delivery_dir, run_dir_user_path, mqc_report_url, message, no_demux, allowed_barcode_mismatch, manufacturer):
+    demux_text = f"Following basecalling, the reads were demultiplexed using Pheniqs version 2.1.0<sup>2</sup>." if not no_demux else ""
+    basecall_text = "Picard IlluminaBasecallsToFastq version 2.23.8<sup>1</sup>, with APPLY_EAMSS_FILTER set to false" if manufacturer == "Illumina" else "Bases2Fastq version 2.1.0<sup>1</sup>"
+
+    basecall_citation = '"Picard Toolkit.” 2019. Broad Institute, GitHub Repository. https://broadinstitute.github.io/picard/; Broad Institute.' if manufacturer == "Illumina" else "Bases2Fastq. Element Biosciences. https://docs.elembio.io/docs/bases2fastq/; Element Biosciences."
     
     delivery_template = f'''
 <p>Dear GenCore Users,</p>
@@ -83,14 +86,14 @@ def get_delivery_email(fcid, delivery_dir, run_dir_user_path, mqc_report_url, me
 
 <p>We are providing a suggested methods section for your publications:</p>
 
-<p>The reads were basecalled using Picard IlluminaBasecallsToFastq version 2.23.8<sup>1</sup>, with APPLY_EAMSS_FILTER set to false. {demux_text} The entire process was executed using a custom nextflow pipeline, GENEFLOW<sup>3</sup>.</p>
+<p>The reads were basecalled using {basecall_text}. {demux_text} The entire process was executed using a custom nextflow pipeline, GENEFLOW<sup>3</sup>.</p>
 
 <p>References</p>
 
 <ol>
-    <li>"Picard Toolkit.” 2019. Broad Institute, GitHub Repository. <a href="https://broadinstitute.github.io/picard/">https://broadinstitute.github.io/picard/</a>; Broad Institute.</li>
-    <li>Galanti, L., Shasha, D. & Gunsalus, K.C. Pheniqs 2.0: accurate, high-performance Bayesian decoding and confidence estimation for combinatorial barcode indexing. BMC Bioinformatics 22, 359 (2021). <a href="https://doi.org/10.1186/s12859-021-04267-5">https://doi.org/10.1186/s12859-021-04267-5</a>.</li>
-    <li>"GENEFLOW." 2023. New York University Center for Genomics and System Biology Genomics Core, GitHub Repository. <a href="https://github.com/gencorefacility/GENEFLOW">https://github.com/gencorefacility/GENEFLOW</a>; New York University.</li>
+    <li>{basecall_citation}</li>
+    <li>Galanti, L., Shasha, D. & Gunsalus, K.C. Pheniqs 2.0: accurate, high-performance Bayesian decoding and confidence estimation for combinatorial barcode indexing. BMC Bioinformatics 22, 359 (2021). https://doi.org/10.1186/s12859-021-04267-5.</li>
+    <li>"GENEFLOW." 2023. New York University Center for Genomics and System Biology Genomics Core, GitHub Repository. https://github.com/gencorefacility/GENEFLOW; New York University.</li>
 </ol>
 
 <p>We kindly request that you include the following acknowledgements in your publications if this data contributed to your research:</p>
@@ -149,6 +152,7 @@ def check_qc_and_deliver(path, summary_report_path):
     fcid, lane_num = summary_report_filename.split("_")[:2]
 
     run = get_run_info(fcid)
+    manufacturer = run['sequencer']['manufacturer']
 
     if success:
         print("qc_delivery.py: Passed QC")
@@ -175,7 +179,9 @@ def check_qc_and_deliver(path, summary_report_path):
         print("data delivered to: ", delivery_dir)
         
         # get delivery email
-        message = get_qc_messages(stats)
+        message = ''
+        if manufacturer == "Illumina":
+            message = get_qc_messages(stats)
         mqc_report_url = "http://core-fastqc.bio.nyu.edu/{}/{}/multiqc_report.html".format(fcid, lane_num)
         delivery_email = get_delivery_email(fcid, delivery_dir, raw_run_dir_path, mqc_report_url, message, pool['no_demux'], pool['allowed_barcode_mismatch'])
         

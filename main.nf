@@ -4,13 +4,21 @@ def run_dir_path = params.run_dir_path
 def run_dir_name = new File(run_dir_path).getName()
 def parts = run_dir_name.split('_')
 def seq_id = parts[1]
-def fcidPart = parts[3]
-def fcid = fcidPart.matches("^[AB].*") ? fcidPart.substring(1) : fcidPart
+def fcidPart = parts[-1]
+def fcid = (fcidPart.matches("^[AB].*") && seq_id != 'AV243205') ? fcidPart.substring(1) : fcidPart
 
-def num_lanes = new File(run_dir_path,'/Data/Intensities/BaseCalls')
-	.listFiles()
-	.findAll { it.name ==~ /L[0-9]{3}/ }
-	.size()
+// Determine the number of lanes based on the sequencer type
+def num_lanes
+if (seq_id == "AV243205") {
+    // Aviti sequencer: fixed 2 lanes
+    num_lanes = 2
+} else {
+    // Illumina sequencer: dynamically determine the number of lanes
+    num_lanes = new File(run_dir_path, '/Data/Intensities/BaseCalls')
+        .listFiles()
+        .findAll { it.name ==~ /L[0-9]{3}/ }
+        .size()
+}
 
 def lanes = channel.from(1..num_lanes)
 
@@ -103,64 +111,137 @@ process rsyncToArchive {
 	"""
 }
 
-process _basecall {
-	publishDir "${alpha}/logs/${fcid}/basecall/${lane}", mode:'copy', failOnError: true, pattern: '.command.*'
+process _basecall_bases2fastq {
+  publishDir "${alpha}/logs/${fcid}/basecall/${lane}", mode:'copy', failOnError: true, pattern: '.command.*'
+  publishDir "${alpha}/logs/${fcid}/basecall/${lane}", mode:'copy', failOnError: false, pattern: '*.csv'
 
-	tag "${fcid}"
+  tag "${fcid}"
+
+  module params.BASES2FASTQ_MODULE
+
+  input:
+  val lane
+
+  output:
+  val(lane), emit: lane
+  path(".command.*")
+  path("*.csv") 
+
+  script:
+  """
+    echo "[SETTINGS],,,
+    SettingName,Value,Lane,
+    I1FastQ,TRUE,$lane,
+    I2FastQ,TRUE,$lane,
+    I1Mask,I1:Y*,$lane,
+    I2Mask,I2:Y*,$lane,
+    SpikeInAsUnassigned,True,$lane" > run_manifest.csv
+
+    out_path="${alpha}/lane/${fcid}/${lane}"
+    mkdir -p \$out_path
+
+    # When you use --group-fastq with --no-projects, bases2fastq
+    # groups all generated sample FASTQ files in the Samples folder.
+    # We exclude all tiles, then include only the tiles from the
+    # lane in question. We must exclude everything in order to use
+    # the include option.
+    bases2fastq \
+      ${params.run_dir_path} \
+      . \
+      --group-fastq \
+      --no-projects \
+      --exclude-tile 'L.*R..C..S.' \
+      --include-tile 'L${lane}R..C..S.' \
+      -p ${task.cpus} \
+      --run-manifest run_manifest.csv
+
+    # Rename output files
+    files=()
+    counter=1  # Initialize the output filename counter
+
+    for file in Samples/DefaultSample_*.fastq.gz; do
+      if [[ \$file == *"R1.fastq.gz"* ]]; then
+        files[0]="\${file}"
+      elif [[ \$file == *"I1.fastq.gz" ]]; then
+        files[1]="\${file}"
+      elif [[ \$file == *"I2.fastq.gz" ]]; then
+        files[2]="\${file}"
+      elif [[ \$file == *"R2.fastq.gz" ]]; then
+        files[3]="\${file}"
+      fi
+    done
+
+    echo "FILES: \${files[@]}"  # Print the files array (for testing)
+
+    for i in "\${!files[@]}"; do  # Iterate over the indices of the array
+      if [[ -n "\${files[\$i]}" ]]; then # Check if the value is non-empty (just in case)
+          new_name="${fcid}_l0${lane}.\${counter}.fastq.gz"
+          cp "\${files[\$i]}" "\${out_path}/\${new_name}"
+          echo "Renamed \${files[\$i]} to \$new_name"
+          counter=\$((counter + 1))
+      fi
+    done
+  """
+}
+
+process _basecall_picard{
+  publishDir "${alpha}/logs/${fcid}/basecall/${lane}", mode:'copy', failOnError: true, pattern: '.command.*'
+
+  tag "${fcid}"
 
   module params.PICARD_MODULE
   module params.JDK_MODULE
 
-	input:
-	val lane
+  input:
+  val lane
 
-	output:
-	val(lane), emit: lane
-	path(".command.*")
+  output:
+  val(lane), emit: lane
+  path(".command.*")
 
-	shell:
-	"""
-	read_structure=\$(python3 -c "
-	import xml.dom.minidom
+  script:
+  """
+    read_structure=\$(python3 -c "
+    import xml.dom.minidom
 
-	read_structure = ''
-	runinfo = xml.dom.minidom.parse('${params.run_dir_path}/RunInfo.xml')
-	nibbles = runinfo.getElementsByTagName('Read')
+    read_structure = ''
+    runinfo = xml.dom.minidom.parse('${params.run_dir_path}/RunInfo.xml')
+    nibbles = runinfo.getElementsByTagName('Read')
 
-	for nib in nibbles:
-		read_structure += nib.attributes['NumCycles'].value + 'T'
-	
-	print(read_structure)
-	")
+    for nib in nibbles:
+      read_structure += nib.attributes['NumCycles'].value + 'T'
+    
+    print(read_structure)
+    ")
 
-	run_barcode=\$(python3 -c "
-	print('${params.run_dir_path}'.split('_')[-2].lstrip('0'))
-	")
+    run_barcode=\$(python3 -c "
+    print('${params.run_dir_path}'.split('_')[-2].lstrip('0'))
+    ")
 
-	out_path="${alpha}/lane/${fcid}/${lane}"
-	mkdir -p \$out_path
+    out_path="${alpha}/lane/${fcid}/${lane}"
+    mkdir -p \$out_path
 
-	tmp_work_dir="${tmp_dir}${fcid}/${lane}"
-	mkdir -p \$tmp_work_dir
+    tmp_work_dir="${tmp_dir}${fcid}/${lane}"
+    mkdir -p \$tmp_work_dir
 
-	java -jar -Xmx58g \$PICARD_JAR IlluminaBasecallsToFastq \
-		LANE=${lane} \
-		READ_STRUCTURE=\${read_structure} \
-		BASECALLS_DIR=${params.run_dir_path}/Data/Intensities/BaseCalls \
-		OUTPUT_PREFIX=\${out_path}/${fcid}_l0${lane} \
-		RUN_BARCODE=\${run_barcode} \
-		MACHINE_NAME=${seq_id} \
-		FLOWCELL_BARCODE=${fcid} \
-		NUM_PROCESSORS=${task.cpus} \
-		APPLY_EAMSS_FILTER=false \
-		INCLUDE_NON_PF_READS=false \
-		MAX_READS_IN_RAM_PER_TILE=200000 \
-		MINIMUM_QUALITY=2 \
-		COMPRESS_OUTPUTS=true \
-		TMP_DIR=\${tmp_work_dir}
+    java -jar -Xmx58g \$PICARD_JAR IlluminaBasecallsToFastq \
+      LANE=${lane} \
+      READ_STRUCTURE=\${read_structure} \
+      BASECALLS_DIR=${params.run_dir_path}/Data/Intensities/BaseCalls \
+      OUTPUT_PREFIX=\${out_path}/${fcid}_l0${lane} \
+      RUN_BARCODE=\${run_barcode} \
+      MACHINE_NAME=${seq_id} \
+      FLOWCELL_BARCODE=${fcid} \
+      NUM_PROCESSORS=${task.cpus} \
+      APPLY_EAMSS_FILTER=false \
+      INCLUDE_NON_PF_READS=false \
+      MAX_READS_IN_RAM_PER_TILE=200000 \
+      MINIMUM_QUALITY=2 \
+      COMPRESS_OUTPUTS=true \
+      TMP_DIR=\${tmp_work_dir}
 
-	rm -rf \${tmp_work_dir}
-	"""
+    rm -rf \${tmp_work_dir}
+    """
 }
 
 process make_pheniqs_config {
@@ -479,6 +560,21 @@ workflow archive{
 	rsyncToArchive(tar.out.file, archive_path + "/${seq_id}/")
     emit:
 	rsyncToArchive.out.exit_code
+}
+
+workflow _basecall{
+  take:
+    lanes
+  main:
+    if (seq_id == 'AV243205') {
+      _basecall_bases2fastq(lanes)
+      lane = _basecall_bases2fastq.out.lane
+    } else {
+      _basecall_picard(lanes)
+      lane = _basecall_picard.out.lane
+    }
+  emit:
+    lane
 }
 
 workflow basecall{

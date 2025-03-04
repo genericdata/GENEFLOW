@@ -7,7 +7,7 @@ import json
 import glob
 from collections import defaultdict
 from interop import py_interop_run_metrics, py_interop_run, py_interop_summary
-from slime import check_do_merge, check_demux, get_run_dir, get_num_lanes
+from slime import check_do_merge, check_demux, get_run_dir, get_num_lanes, get_run_info
 from config import alpha
 
 
@@ -67,10 +67,27 @@ def parse_sav(run_folder):
     return metrics
 
 
+def get_sav(fcid):
+    run = get_run_info(fcid)
+    manufacturer = run['sequencer']['manufacturer']
+    if manufacturer == "Element":
+        sav = {
+                "phix_aligned_dict": {1: 0, 2:0, 3:0, 4:0},
+                "total_num_reads": {1: 0, 2:0, 3:0, 4:0},
+                "total_pf_reads": {1: 0, 2:0, 3:0, 4:0},        
+            }
+    else:
+        run_dir = get_run_dir(fcid)['run_dir']
+        sav = parse_sav(run_dir)
+    
+    return  sav
+
+
 def generate_reports(fcid):
-    run_dir = get_run_dir(fcid)['run_dir']
+    #run_dir = get_run_dir(fcid)['run_dir']
     num_lanes = get_num_lanes(fcid) 
-    sav = parse_sav(run_dir)
+    #sav = parse_sav(run_dir)
+    sav = get_sav(fcid)
     print("sav: {}".format(sav))
     phix_aligned_per_lane = sav["phix_aligned_dict"]
     total_num_reads = sav["total_num_reads"]

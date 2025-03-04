@@ -137,11 +137,19 @@ def get_run_dir(fcid):
 
 
 def check_do_merge(fcid):
-    run = get_run_info(fcid)
+    run = get_run_info(fcid) 
     run_type = run["run_type_name"]
     return (
-        "NextSeq" in run["sequencer"]["name"] or "NovaSeq" in run["sequencer"]["name"]
-    ) and not run_type.startswith("XP")
+        "NextSeq" in run["sequencer"]["name"] or  # Sequencer is NextSeq
+        ( 
+            "NovaSeq" in run["sequencer"]["name"] and  # Sequencer is NovaSeq
+            not run_type.startswith("XP")  # Run type does not start with "XP"
+        ) or
+        (
+            "Aviti" in run["sequencer"]["name"] and  # Sequencer is Aviti
+            run_type.startswith("ML - ")  # Run type starts with "ML"
+        )
+    )
 
 
 # Check if the pool in this lane needs to be demultiplexed or not

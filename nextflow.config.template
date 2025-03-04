@@ -11,11 +11,13 @@ params.admin_email = ""
 
 // modules
 params.PICARD_MODULE = "picard/2.23.8"
-params.PHENIQS_MODULE = "pheniqs/1.1.0"
-params.PBZIP2_MODULE = "pbzip2/1.1.13"
-params.MULTIQC_MODULE = "multiqc/1.9"
-params.ANACONDA_MODULE = "anaconda3/2020.07"
+params.PHENIQS1_MODULE = "pheniqs/1.1.0"
+params.PHENIQS2_MODULE = "pheniqs/2.1.0"
 params.JDK_MODULE = "jdk/1.8.0_271"
+params.ANACONDA_MODULE = "anaconda3/2020.07"
+params.MULTIQC_MODULE = "multiqc/1.27"
+params.PBZIP2_MODULE = "pbzip2/1.1.13"
+params.BASES2FASTQ_MODULE = "bases2fastq/2.1.0"
 params.conda_path = ""
 
 // nextflow work dir
@@ -30,8 +32,9 @@ mail {
     smtp.starttls.enable = true
 }
 
-// enable conda
+// enable conda and report overwrite
 conda.enabled = true
+report.overwrite = true
 
 // Slurm settings
 process {
@@ -53,29 +56,35 @@ process {
  withName: tar { 
         memory = '4 GB'
         cpus = 6
-        time = { 2.h * task.attempt }
+        time = { 12.h * task.attempt }
   }
 
   withName: rsyncToArchive { 
         memory = '4 GB'
         cpus = 1
-        time = { 1.h * task.attempt }
+        time = { 4.h * task.attempt }
   }
 
-  withName: _basecall { 
+ withName: _basecall_picard { 
         memory = { 30.GB * task.attempt }
         cpus = 4
         time = { 32.h * task.attempt }
   }
 
-  withName: make_pheniqs_config { 
+withName: _basecall_bases2fastq {
+        memory = { 60.GB * task.attempt }
+        cpus = 20
+        time = { 2.h * task.attempt }
+  }
+
+ withName: make_pheniqs_config { 
         memory = '4 GB'
         cpus = 1
         time = { 5.min * task.attempt }
   }
 
-  withName: run_pheniqs { 
-        memory = { 30.GB * task.attempt }
+ withName: run_pheniqs { 
+        memory = { 60.GB * task.attempt }
         cpus = 20
         time = { 24.h * task.attempt }
   }
@@ -99,3 +108,13 @@ process {
   }
 }
 
+trace {
+    enabled = true
+    file = params.trace_file_path
+    fields = 'task_id,name,status,cpus,memory,realtime,%cpu,%mem,vmem'
+    overwrite = true
+}
+
+env {
+  SEQERA_ACCESS_TOKEN=""
+}

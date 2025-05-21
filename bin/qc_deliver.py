@@ -72,7 +72,6 @@ def update_lane_stats(name, lane_num, stat_name, stat_value):
     
     return {'success': True, 'msg': ''}
 
-import os
 
 def get_delivery_email(fcid, delivery_dir, run_dir_user_path, mqc_report_url, message, no_demux, allowed_barcode_mismatch, manufacturer):
     demux_text = ""

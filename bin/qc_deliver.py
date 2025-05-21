@@ -72,13 +72,26 @@ def update_lane_stats(name, lane_num, stat_name, stat_value):
     
     return {'success': True, 'msg': ''}
 
+import os
 
 def get_delivery_email(fcid, delivery_dir, run_dir_user_path, mqc_report_url, message, no_demux, allowed_barcode_mismatch, manufacturer):
-    demux_text = f"Following basecalling, the reads were demultiplexed using Pheniqs version 2.1.0<sup>2</sup>." if not no_demux else ""
-    basecall_text = "Picard IlluminaBasecallsToFastq version 2.23.8<sup>1</sup>, with APPLY_EAMSS_FILTER set to false" if manufacturer == "Illumina" else "Bases2Fastq version 2.1.0<sup>1</sup>"
-
-    basecall_citation = '"Picard Toolkit.” 2019. Broad Institute, GitHub Repository. https://broadinstitute.github.io/picard/; Broad Institute.' if manufacturer == "Illumina" else "Bases2Fastq. Element Biosciences. https://docs.elembio.io/docs/bases2fastq/; Element Biosciences."
+    demux_text = ""
+    demux_citation = ""
     
+    if not no_demux:
+        demux_text = "Following basecalling, the reads were demultiplexed using Pheniqs version 2.1.0<sup>2</sup>."
+        demux_citation = '<li>Galanti, L., Shasha, D. & Gunsalus, K.C. Pheniqs 2.0: accurate, high-performance Bayesian decoding and confidence estimation for combinatorial barcode indexing. BMC Bioinformatics 22, 359 (2021). https://doi.org/10.1186/s12859-021-04267-5.</li>'
+
+    if manufacturer == "Illumina":
+        basecall_text = "Picard IlluminaBasecallsToFastq version 2.23.8<sup>1</sup>, with APPLY_EAMSS_FILTER set to false"
+        basecall_citation = '"Picard Toolkit.” 2019. Broad Institute, GitHub Repository. https://broadinstitute.github.io/picard/; Broad Institute.'
+    else:
+        basecall_text = "Bases2Fastq version 2.1.0<sup>1</sup>"
+        basecall_citation = "Bases2Fastq. Element Biosciences. https://docs.elembio.io/docs/bases2fastq/; Element Biosciences."
+
+    geneflow_citation_number = 3 if not no_demux else 2
+    geneflow_citation = f'<li>"GENEFLOW." 2023. New York University Center for Genomics and System Biology Genomics Core, GitHub Repository. https://github.com/gencorefacility/GENEFLOW; New York University.</li>'
+
     delivery_template = f'''
 <p>Dear GenCore Users,</p>
 
@@ -86,14 +99,14 @@ def get_delivery_email(fcid, delivery_dir, run_dir_user_path, mqc_report_url, me
 
 <p>We are providing a suggested methods section for your publications:</p>
 
-<p>The reads were basecalled using {basecall_text}. {demux_text} The entire process was executed using a custom nextflow pipeline, GENEFLOW<sup>3</sup>.</p>
+<p>The reads were basecalled using {basecall_text}. {demux_text} The entire process was executed using a custom nextflow pipeline, GENEFLOW<sup>{geneflow_citation_number}</sup>.</p>
 
 <p>References</p>
 
 <ol>
     <li>{basecall_citation}</li>
-    <li>Galanti, L., Shasha, D. & Gunsalus, K.C. Pheniqs 2.0: accurate, high-performance Bayesian decoding and confidence estimation for combinatorial barcode indexing. BMC Bioinformatics 22, 359 (2021). https://doi.org/10.1186/s12859-021-04267-5.</li>
-    <li>"GENEFLOW." 2023. New York University Center for Genomics and System Biology Genomics Core, GitHub Repository. https://github.com/gencorefacility/GENEFLOW; New York University.</li>
+    {demux_citation}
+    {geneflow_citation}
 </ol>
 
 <p>We kindly request that you include the following acknowledgements in your publications if this data contributed to your research:</p>
@@ -113,7 +126,7 @@ def get_delivery_email(fcid, delivery_dir, run_dir_user_path, mqc_report_url, me
 
 <p>Best,<br>
 GenCore Team</p>
-    '''    
+    '''
     return delivery_template
 
 def deliver_raw_run_dir(run_dir_path, group):
@@ -124,20 +137,12 @@ def deliver_raw_run_dir(run_dir_path, group):
     if os.path.exists(raw_run_delivery_folder):
         return run_dir_user_path
     
-    #shutil.copytree(run_dir_path, raw_run_delivery_folder)
-    #mode = 0o555 # This is the octal representation for r-xr-xr-x
-    #change_permissions_recursive(raw_run_delivery_folder, mode)
     copy_command = subprocess.getoutput('mkdir -p {}; cp -rv {}/* {}/.'.format(raw_run_delivery_folder, run_dir_path, raw_run_delivery_folder))
     return run_dir_user_path
 
 
 def deliver_data(fcid, path, lane_num, group, scheduled_date):
     delivery_dir = delivery_folder_root + "/" + group + "/" + scheduled_date + "_" + get_delivery_fcid(fcid) + "/" + lane_num
-    #if os.path.exists(delivery_dir):
-    #    shutil.rmtree(delivery_dir)
-    #shutil.copytree(path, delivery_dir)
-    #mode = 0o555 # This is the octal representation for r-xr-xr-x
-    #change_permissions_recursive(delivery_dir, mode)
     copy_command = subprocess.getoutput('mkdir -p {}; rm -f {}/*; cp -v {}/* {}/.'.format(delivery_dir, delivery_dir, path, delivery_dir))
     return delivery_dir
 
@@ -183,7 +188,7 @@ def check_qc_and_deliver(path, summary_report_path):
         if manufacturer == "Illumina":
             message = get_qc_messages(stats)
         mqc_report_url = "http://core-fastqc.bio.nyu.edu/{}/{}/multiqc_report.html".format(fcid, lane_num)
-        delivery_email = get_delivery_email(fcid, delivery_dir, raw_run_dir_path, mqc_report_url, message, pool['no_demux'], pool['allowed_barcode_mismatch'])
+        delivery_email = get_delivery_email(fcid, delivery_dir, raw_run_dir_path, mqc_report_url, message, pool['no_demux'], pool['allowed_barcode_mismatch'], manufacturer)
         
         # update lane stats in tuboweb
         update_lane_stats(fcid, i, 'total_num_reads', stats["Total # of Single-End Reads"])

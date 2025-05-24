@@ -62,6 +62,32 @@ def get_num_lanes(fcid):
     response = requests.get(run_url, params=params)
     run_data = response.json()
     return run_data
+    '''
+
+    # New way: check locally
+    # Reflects actual data on disk 
+    # (won’t silently mis-count if LIMS is stale or a lane failed).
+    run_dir = get_run_dir(fcid)['run_dir']
+
+    # 1) Illumina: check for BaseCalls/L### dirs
+    illumina_base = os.path.join(run_dir, 'Data', 'Intensities', 'BaseCalls')
+    if os.path.isdir(illumina_base):
+        lanes = [d for d in os.listdir(illumina_base) 
+                 if re.match(r'^L\d{3}$', d)]
+        if lanes:
+            return len(lanes)
+
+    # 2) Aviti: look in Location for .loc files like L1R19C02S1.loc
+    loc_dir = os.path.join(run_dir, 'Location')
+    if os.path.isdir(loc_dir):
+        # extract the lane number after the leading “L”
+        lane_ids = set()
+        for fname in os.listdir(loc_dir):
+            m = re.match(r'^L(\d+)R\d+C\d+S\d+\.loc$', fname)
+            if m:
+                lane_ids.add(m.group(1))
+        if lane_ids:
+            return len(lane_ids)
 
 
 def get_lanes(run_id):

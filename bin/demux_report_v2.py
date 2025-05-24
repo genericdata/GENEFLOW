@@ -64,51 +64,88 @@ def parse_sav(run_folder):
     summary = py_interop_summary.run_summary()
     py_interop_summary.summarize_run_metrics(run_metrics, summary)
     metrics = compute_lane_metrics_from_sav(summary)
+    '''
+    metrics = {}
+    metrics['phix_aligned_dict']={1: 0, 2:0, 3:0, 4:0}
+    metrics['total_num_reads']={1: 0, 2:0, 3:0, 4:0}
+    metrics['total_pf_reads']={1: 0, 2:0, 3:0, 4:0}
+    '''
     return metrics
 
 
-def get_sav(fcid):
+def parse_aviti_run_stats(run_dir):
+    """
+    Read run_dir/AvitiRunStats.json and return a metrics dict keyed by lane.
+    For each lane it extracts:
+      - phix_aligned_dict: average PhiXAlignmentRate across all reads (R1, R2, etc.)
+      - total_num_reads:   PolonyCount
+      - total_pf_reads:    PFCount
+    Supports any number of lanes.
+    """
+    stats_file = os.path.join(run_dir, "AvitiRunStats.json")
+    with open(stats_file, "r") as f:
+        data = json.load(f)
+
+    lane_stats = data.get("LaneStats", [])
+    metrics = {
+        "phix_aligned_dict": {},
+        "total_num_reads":   {},
+        "total_pf_reads":    {},
+    }
+
+    for i, rec in enumerate(lane_stats):
+        # JSON uses zero‐based lane indices; convert to 1-based
+        lane = i + 1
+
+        # per‐lane counts
+        polony = rec.get("PolonyCount", 0)
+        pf     = rec.get("PFCount",    0)
+
+        # average PhiX alignment over all read entries
+        reads = rec.get("Reads", [])
+        rates = [
+            r.get("PhiXAlignmentRate", 0)
+            for r in reads
+            if "PhiXAlignmentRate" in r
+        ]
+        phi_avg = (sum(rates) / len(rates)) if rates else 0.0
+
+        # populate dicts
+        metrics["total_num_reads"][lane]   = polony
+        metrics["total_pf_reads"][lane]    = pf
+        metrics["phix_aligned_dict"][lane] = phi_avg
+
+    return metrics
+
+def get_metrics(fcid):
     run = get_run_info(fcid)
+    run_dir = get_run_dir(fcid)['run_dir']
     manufacturer = run['sequencer']['manufacturer']
     if manufacturer == "Element":
-        sav = {
-                "phix_aligned_dict": {1: 0, 2:0, 3:0, 4:0},
-                "total_num_reads": {1: 0, 2:0, 3:0, 4:0},
-                "total_pf_reads": {1: 0, 2:0, 3:0, 4:0},        
-            }
+        metrics = parse_aviti_run_stats(run_dir)
     else:
-        run_dir = get_run_dir(fcid)['run_dir']
-        sav = parse_sav(run_dir)
+        metrics = parse_sav(run_dir)
     
-    return  sav
+    return metrics
 
 
 def generate_reports(fcid):
-    #run_dir = get_run_dir(fcid)['run_dir']
     num_lanes = get_num_lanes(fcid) 
-    #sav = parse_sav(run_dir)
-    sav = get_sav(fcid)
-    print("sav: {}".format(sav))
-    phix_aligned_per_lane = sav["phix_aligned_dict"]
-    total_num_reads = sav["total_num_reads"]
-    total_pf_reads = sav["total_pf_reads"]
+    metrics = get_metrics(fcid)
+    print(f"metrics: {metrics}")
 
     lanes_dict = {}
     for lane in range(1, num_lanes + 1):
-        # lane_read_count_total_unfiltered (total num reads) is obtained from 
-        # SAV directly, but lane_read_count_total_filtered (# pf reads) is
-        # obtained from pheniqs if demux, otherwise from SAV
-        lanes_dict[lane] = {"lane_read_count_total_unfiltered": total_num_reads[lane]}
+        lanes_dict[lane] = {}
         no_demux = check_demux(fcid, lane)
         if not no_demux:
             pheniqs_out = get_pheniqs_output(fcid, lane)
             lanes_dict[lane].update(parse_pheniqs_output(pheniqs_out))
-        else:
-            lanes_dict[lane]["lane_read_count_total_filtered"] = total_num_reads[lane]
 
     do_merge = check_do_merge(fcid)
     prepare_demux_reports(lanes_dict, do_merge, fcid)
-    prepare_summary_reports(lanes_dict, do_merge, fcid, phix_aligned_per_lane, total_pf_reads)
+    # prepare_summary_reports() needs lanes_dict because it has the undetermined reads per lane
+    prepare_summary_reports(lanes_dict, do_merge, fcid, metrics)
 
 
 def create_demux_report(libs, num_lanes):
@@ -152,22 +189,27 @@ def create_summary_report(
     return summary
 
 
-def prepare_summary_reports(lanes_dict, do_merge, fcid, phix_aligned_per_lane, total_pf_reads):
+def prepare_summary_reports(lanes_dict, do_merge, fcid, metrics):
     if do_merge:
         path = "merged/{}_merged_summary_mqc.txt".format(fcid)
         no_demux = check_demux(fcid, 1)        
-        fc_read_count = get_flowcell_read_count(lanes_dict, no_demux)
-        phix_aligned = sum(phix_aligned_per_lane.values()) / len(phix_aligned_per_lane)
+        phix_aligned = sum(metrics["phix_aligned_dict"].values()) / len(metrics["phix_aligned_dict"])
+        undetermined = (
+            "" if no_demux
+            else round(sum(l["undetermined"] for l in lanes_dict.values()) / len(lanes_dict), 2)
+        )
+
         report = create_summary_report(
             "Number of Lanes",
             len(lanes_dict),
-            fc_read_count["total_unfiltered"],
-            sum(total_pf_reads.values()) if no_demux else fc_read_count["total_filtered"],
-            "" if no_demux else fc_read_count["undetermined"],
+            sum(metrics["total_num_reads"].values()),
+            sum(metrics["total_pf_reads"].values()),
+            undetermined,
             phix_aligned,
             no_demux
         )
         write_report(report, path)
+
     else:
         for l in sorted(lanes_dict):
             path = "{}/{}_{}_summary_mqc.txt".format(l, fcid, l)
@@ -175,10 +217,10 @@ def prepare_summary_reports(lanes_dict, do_merge, fcid, phix_aligned_per_lane, t
             report = create_summary_report(
                 "Lane",
                 l,
-                lanes_dict[l]["lane_read_count_total_unfiltered"],
-                total_pf_reads[l] if no_demux else lanes_dict[l]["lane_read_count_total_filtered"],
+                metrics["total_num_reads"][l],
+                metrics["total_pf_reads"][l],
                 "" if no_demux else lanes_dict[l]["undetermined"],
-                phix_aligned_per_lane[l],
+                metrics["phix_aligned_dict"][l],
                 no_demux
             )
             write_report(report, path)
@@ -223,36 +265,11 @@ def write_report(report, path):
     print("Wrote report: {}".format(path))
 
 
-def get_flowcell_read_count(lanes, no_demux):
-    fc_read_count_total_unfiltered = 0
-    fc_read_count_total_filtered = 0
-    fc_undetermined = 0
-    for l in sorted(lanes):
-        fc_read_count_total_unfiltered += lanes[l]["lane_read_count_total_unfiltered"]
-        fc_read_count_total_filtered += lanes[l]["lane_read_count_total_filtered"]
-        if not no_demux:
-            fc_undetermined += lanes[l]["undetermined"]
-    fc_undetermined = round((fc_undetermined / len(lanes)), 2)
-
-    fc_read_count_dict = {
-        "total_unfiltered": fc_read_count_total_unfiltered,
-        "total_filtered": fc_read_count_total_filtered
-    }
-
-    if not no_demux:
-        fc_read_count_dict['undetermined'] = fc_undetermined
-
-    return fc_read_count_dict
-
-
 def parse_pheniqs_output(report):
     with open(report, "r") as f:
         data = f.read()
     json_data = json.loads(data)
-
     lane_dict = {"libs": {}}
-    read_count_total = 0
-    portion_total = 0
 
     for r in json_data["sample"]["classified"]:
         lib_name = str(r["LB"])
@@ -260,8 +277,6 @@ def parse_pheniqs_output(report):
             "yield": r["count"],
             "portion": round(r["pooled fraction"] * 100, 3),
         }
-        #read_count_total += r["pf count"]
-        #portion_total += r["pf pooled fraction"] * 100
 
     lane_dict['libs']['undetermined'] = {
         "yield": json_data["sample"]["unclassified"]['count'],
@@ -272,7 +287,6 @@ def parse_pheniqs_output(report):
     lane_dict["undetermined"] = (
         round(json_data["sample"]["unclassified"]["pooled fraction"] * 100,3)
     )
-    lane_dict["portion_total"] = round(portion_total, 0)
 
     return lane_dict
 

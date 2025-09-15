@@ -7,18 +7,22 @@ def seq_id = parts[1]
 def fcidPart = parts[-1]
 def fcid = (fcidPart.matches("^[AB].*") && seq_id != 'AV243205') ? fcidPart.substring(1) : fcidPart
 
-// Determine the number of lanes based on the sequencer type
-def num_lanes
-if (seq_id == "AV243205") {
-    // Aviti sequencer: fixed 2 lanes
-    num_lanes = 2
-} else {
-    // Illumina sequencer: dynamically determine the number of lanes
-    num_lanes = new File(run_dir_path, '/Data/Intensities/BaseCalls')
-        .listFiles()
-        .findAll { it.name ==~ /L[0-9]{3}/ }
-        .size()
+def envVars = ["PYTHONPATH=${workflow.projectDir}/bin"]
+def cmdList = [
+    "python3",
+    "-c",
+    "from slime import get_num_lanes; print(get_num_lanes('${fcid}'))"
+]
+def proc = cmdList.execute(envVars, null)
+proc.waitFor()
+if (proc.exitValue() != 0) {
+    error "get_num_lanes failed: ${proc.err.text}"
 }
+def lines = proc.in.text.readLines()
+if (!lines) {
+  error "No output from get_num_lanes()"
+}
+def num_lanes = lines.last().trim().toInteger()
 
 def lanes = channel.from(1..num_lanes)
 

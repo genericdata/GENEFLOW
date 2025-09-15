@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file, effective May 2025.
 
+## [2025-09-04]
+### Updated
+- Updated Bases2Fastq to version 2.2.0
+
 ## [2025-05-25]  
 ### Changed  
 - Source **Num PF reads** exclusively from SAV (Illumina) or `AvitiRunStats.json`.

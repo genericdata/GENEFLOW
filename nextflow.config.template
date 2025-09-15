@@ -17,7 +17,7 @@ params.JDK_MODULE = "jdk/1.8.0_271"
 params.ANACONDA_MODULE = "anaconda3/2020.07"
 params.MULTIQC_MODULE = "multiqc/1.27"
 params.PBZIP2_MODULE = "pbzip2/1.1.13"
-params.BASES2FASTQ_MODULE = "bases2fastq/2.1.0"
+params.BASES2FASTQ_MODULE = "bases2fastq/2.2.0"
 params.conda_path = ""
 
 // nextflow work dir

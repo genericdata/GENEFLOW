@@ -94,13 +94,14 @@ process tar {
 process rsyncToArchive {
 	echo true 
 
-	publishDir "${alpha}/logs/${fcid}/archive/rsync/", mode:'copy', failOnError: true
+	publishDir "${alpha}/logs/${fcid}/archive/rsync/${label}", mode:'copy', failOnError: true
 	
 	tag "${fcid}"
 
 	input:
 	path SRC
 	val destination
+  val label
 
 	output:
 	path(".command.*")
@@ -554,14 +555,14 @@ workflow _qc{
         fastqc_dep = merge_lanes.out.exit_code.ifEmpty("0")
         fastqc(path, fastqc_dep, qc_dep)
         multiqc(fastqc.out.delivery_path_and_fastqc_files, demux_reports.out.reports)
-        rsyncToArchive(multiqc.out.files, fastqc_path + "/${fcid}/")
+        rsyncToArchive(multiqc.out.files, fastqc_path + "/${fcid}/", 'qc')
 	deliver(archive_exit_code, rsyncToArchive.out.exit_code, multiqc.out.delivery_path_and_summary_report)
 }
 
 workflow archive{
     main:
 	tar()
-	rsyncToArchive(tar.out.file, archive_path + "/${seq_id}/")
+	rsyncToArchive(tar.out.file, archive_path + "/${seq_id}/", 'tar')
     emit:
 	rsyncToArchive.out.exit_code
 }

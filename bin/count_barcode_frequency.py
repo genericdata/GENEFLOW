@@ -16,11 +16,12 @@ def get_barcodes(fastq_path):
 
 
 def print_barcodes(barcodes):
+    print("Barcode Sequence(s),Count,Frequency (%)")
     total = sum(barcodes.values())
     for barcode, count in sorted(
         barcodes.items(), key=lambda item: item[1], reverse=True
     ):
-        print(f"{barcode}\t{count}\t{round(count/total*100, 2)}")
+        print(f"{barcode},{count},{round(count/total*100, 2)}")
 
 
 def main():

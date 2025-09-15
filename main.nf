@@ -110,7 +110,7 @@ process rsyncToArchive {
 	"""
 	echo "rsyncToArchive: SRC: ${SRC}, destination: ${destination}"
 	ssh -i \$HOME/.ssh/id_rsa core2 "mkdir -p ${destination}"
-	rsync --copy-links --progress -r -e \"ssh -i \${HOME}/.ssh/id_rsa\" ${SRC} core2:${destination}/.
+  rsync -avz --copy-links --progress --chmod=Dug=rwx,Dgo=rx,Fug=rw,Fgo=r -e "ssh -i ${HOME}/.ssh/id_rsa" ${SRC} core2:${destination}/
 	exit_code=\$?
 	"""
 }

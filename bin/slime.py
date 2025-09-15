@@ -57,13 +57,6 @@ def get_run_info(fcid):
 
 
 def get_num_lanes(fcid):
-    run_url = f"{tw_api_root}flowcell/illumina/{fcid}/num_lanes"
-    params = {"username": tw_user, "api_key": tw_api_key}
-    response = requests.get(run_url, params=params)
-    run_data = response.json()
-    return run_data
-    '''
-
     # New way: check locally
     # Reflects actual data on disk 
     # (won’t silently mis-count if LIMS is stale or a lane failed).

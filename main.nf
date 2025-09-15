@@ -495,7 +495,7 @@ process multiqc {
 
     cp ${fcid}_${lane}_*_mqc.txt ${lane}/.
     cd ${lane}
-    multiqc -f -c ${workflow.projectDir}/bin/mqc_config.yaml .
+    multiqc -f -c ${workflow.projectDir}/bin/mqc_config.yaml --ai-summary-full .
     """
 }
 

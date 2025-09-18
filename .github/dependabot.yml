@@ -8,3 +8,4 @@ updates:
     schedule:
       interval: "daily"
     target-branch: "main"
+    allow-beta-ecosystems: true

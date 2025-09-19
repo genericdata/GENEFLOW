@@ -2,10 +2,9 @@
 # https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 
 version: 2
+enable-beta-ecosystems: true
 updates:
-  - package-ecosystem: "conda" 
-    directory: "/" # Location of package manifests
+  - package-ecosystem: "conda"
+    directory: "/"
     schedule:
       interval: "daily"
-    target-branch: "main"
-    allow-beta-ecosystems: true

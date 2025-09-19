@@ -1,6 +1,28 @@
 {
+  // This is a minimal configuration that tells Renovate to manage dependencies
+  // found in any 'env.yml' file within the repository.
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Renovate configuration for a conda environment, including pip dependencies.",
+  
+  // Extends a base configuration to inherit standard rules and presets.
   "extends": [
     "config:recommended"
-  ]
+  ],
+  
+  // Defines the package managers to be used and the files they should inspect.
+  "managers": {
+    // The 'conda' manager will look for dependencies in 'env.yml'.
+    "conda": {
+      "fileMatch": [
+        "**/env.yml"
+      ]
+    },
+    // The 'pip' manager is enabled to handle dependencies listed under the 'pip' section of the 'env.yml' file.
+    "pip": {
+      "fileMatch": [
+        "**/env.yml"
+      ]
+    }
+  }
 }
+

@@ -1,0 +1,29 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:base"],
+  "packageRules": [
+    {
+      "matchManagers": ["conda"],
+      "enabled": true,
+      "groupName": "Conda dependencies",
+      "schedule": ["weekly"],
+      "automerge": false
+    },
+    {
+      "matchManagers": ["pip_requirements", "poetry"],
+      "enabled": true,
+      "groupName": "Python dependencies",
+      "schedule": ["weekly"],
+      "automerge": false
+    }
+  ],
+  "enabledManagers": [
+    "conda",
+    "pip_requirements",
+    "poetry"
+  ],
+  "dependencyDashboard": true,
+  "labels": ["dependencies", "python"],
+  "prHourlyLimit": 5,
+  "prConcurrentLimit": 10
+}

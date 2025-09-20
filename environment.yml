@@ -6,6 +6,8 @@ channels:
 dependencies:
   # renovate: datasource=conda depName=conda-forge/pbzip2
   - pbzip2=1.1.13
+  # renovate: datasource=conda depName=bioconda/picard
+  - bioconda::picard=2.23.8
   - pip:
     # renovate: datasource=pypi
     - interop==1.1.4

@@ -4,11 +4,10 @@
   "baseBranches": [
     "dev"
   ],
-  "fileMatchers": ["**/{nextflow.config,main.nf}"],
-  "matchManagers": [
+  "packageRules": [
     {
-      "manager": "regex",
       "fileMatch": ["main.nf"],
+      "matchManagers": ["regex"],
       "matchStrings": [
         "container\\s+['\"](?<depName>docker:\\/\\/.*):(?<currentValue>.*)['\"]"
       ]

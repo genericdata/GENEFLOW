@@ -73,9 +73,24 @@ def update_lane_stats(name, lane_num, stat_name, stat_value):
     return {'success': True, 'msg': ''}
 
 
-def get_delivery_email(fcid, delivery_dir, run_dir_user_path, mqc_report_url, message, no_demux, allowed_barcode_mismatch):
-    demux_text = f"Following basecalling, the reads were demultiplexed using Pheniqs version 1.1.0<sup>2</sup>, allowing for {allowed_barcode_mismatch} mismatch{'es' if allowed_barcode_mismatch > 1 else ''} in sample index sequences." if not no_demux else ""
+def get_delivery_email(fcid, delivery_dir, run_dir_user_path, mqc_report_url, message, no_demux, allowed_barcode_mismatch, manufacturer):
+    demux_text = ""
+    demux_citation = ""
     
+    if not no_demux:
+        demux_text = "Following basecalling, the reads were demultiplexed using Pheniqs version 2.1.0<sup>2</sup>."
+        demux_citation = '<li>Galanti, L., Shasha, D. & Gunsalus, K.C. Pheniqs 2.0: accurate, high-performance Bayesian decoding and confidence estimation for combinatorial barcode indexing. BMC Bioinformatics 22, 359 (2021). https://doi.org/10.1186/s12859-021-04267-5.</li>'
+
+    if manufacturer == "Illumina":
+        basecall_text = "Picard IlluminaBasecallsToFastq version 2.23.8<sup>1</sup>, with APPLY_EAMSS_FILTER set to false"
+        basecall_citation = '"Picard Toolkit.” 2019. Broad Institute, GitHub Repository. https://broadinstitute.github.io/picard/; Broad Institute.'
+    else:
+        basecall_text = "Bases2Fastq version 2.1.0<sup>1</sup>"
+        basecall_citation = "Bases2Fastq. Element Biosciences. https://docs.elembio.io/docs/bases2fastq/; Element Biosciences."
+
+    geneflow_citation_number = 3 if not no_demux else 2
+    geneflow_citation = f'<li>"GENEFLOW." 2023. New York University Center for Genomics and System Biology Genomics Core, GitHub Repository. https://github.com/gencorefacility/GENEFLOW; New York University.</li>'
+
     delivery_template = f'''
 <p>Dear GenCore Users,</p>
 
@@ -83,26 +98,26 @@ def get_delivery_email(fcid, delivery_dir, run_dir_user_path, mqc_report_url, me
 
 <p>We are providing a suggested methods section for your publications:</p>
 
-<p>The reads were basecalled using Picard IlluminaBasecallsToFastq version 2.23.8<sup>1</sup>, with APPLY_EAMSS_FILTER set to false. {demux_text} The entire process was executed using a custom nextflow pipeline, GENEFLOW<sup>3</sup>.</p>
+<p>The reads were basecalled using {basecall_text}. {demux_text} The entire process was executed using a custom nextflow pipeline, GENEFLOW<sup>{geneflow_citation_number}</sup>.</p>
 
 <p>References</p>
 
 <ol>
-    <li>"Picard Toolkit.” 2019. Broad Institute, GitHub Repository. <a href="https://broadinstitute.github.io/picard/">https://broadinstitute.github.io/picard/</a>; Broad Institute.</li>
-    <li>Galanti, L., Shasha, D. & Gunsalus, K.C. Pheniqs 2.0: accurate, high-performance Bayesian decoding and confidence estimation for combinatorial barcode indexing. BMC Bioinformatics 22, 359 (2021). <a href="https://doi.org/10.1186/s12859-021-04267-5">https://doi.org/10.1186/s12859-021-04267-5</a>.</li>
-    <li>"GENEFLOW." 2023. New York University Center for Genomics and System Biology Genomics Core, GitHub Repository. <a href="https://github.com/gencorefacility/GENEFLOW">https://github.com/gencorefacility/GENEFLOW</a>; New York University.</li>
+    <li>{basecall_citation}</li>
+    {demux_citation}
+    {geneflow_citation}
 </ol>
 
 <p>We kindly request that you include the following acknowledgements in your publications if this data contributed to your research:</p>
 <p>This work was supported in part through the NYU IT High Performance Computing resources, services, and staff expertise. We acknowledge the Zegar Family Foundation for their generous support. We thank the NYU Center for Genomics and System Biology Genomics Core for their assistance and resources.</p>
 
 <p>You must have the required permissions to access data on the HPC. If this is your first time sequencing, please visit: <a href="https://gencore.bio.nyu.edu/bioinformatics/getting-started/">https://gencore.bio.nyu.edu/bioinformatics/getting-started/</a></p>
-
-<p>Results for your recently completed sequencing run on flowcell {fcid} are available here:<br>
+<hr>
+<p><b>Results for your recently completed sequencing run on flowcell {fcid} are available here:</b><br>
 {delivery_dir}<br>
 {run_dir_user_path}</p>
 
-<p>All sequencing run and library statistics can be viewed in the interactive MultiQC report here:<br>
+<p><b>All sequencing run and library statistics can be viewed in the interactive MultiQC report here:</b><br>
 <a href="{mqc_report_url}">{mqc_report_url}</a><br>
 {message}</p>
 
@@ -110,7 +125,7 @@ def get_delivery_email(fcid, delivery_dir, run_dir_user_path, mqc_report_url, me
 
 <p>Best,<br>
 GenCore Team</p>
-    '''    
+    '''
     return delivery_template
 
 def deliver_raw_run_dir(run_dir_path, group):
@@ -121,20 +136,12 @@ def deliver_raw_run_dir(run_dir_path, group):
     if os.path.exists(raw_run_delivery_folder):
         return run_dir_user_path
     
-    #shutil.copytree(run_dir_path, raw_run_delivery_folder)
-    #mode = 0o555 # This is the octal representation for r-xr-xr-x
-    #change_permissions_recursive(raw_run_delivery_folder, mode)
     copy_command = subprocess.getoutput('mkdir -p {}; cp -rv {}/* {}/.'.format(raw_run_delivery_folder, run_dir_path, raw_run_delivery_folder))
     return run_dir_user_path
 
 
 def deliver_data(fcid, path, lane_num, group, scheduled_date):
     delivery_dir = delivery_folder_root + "/" + group + "/" + scheduled_date + "_" + get_delivery_fcid(fcid) + "/" + lane_num
-    #if os.path.exists(delivery_dir):
-    #    shutil.rmtree(delivery_dir)
-    #shutil.copytree(path, delivery_dir)
-    #mode = 0o555 # This is the octal representation for r-xr-xr-x
-    #change_permissions_recursive(delivery_dir, mode)
     copy_command = subprocess.getoutput('mkdir -p {}; rm -f {}/*; cp -v {}/* {}/.'.format(delivery_dir, delivery_dir, path, delivery_dir))
     return delivery_dir
 
@@ -149,6 +156,7 @@ def check_qc_and_deliver(path, summary_report_path):
     fcid, lane_num = summary_report_filename.split("_")[:2]
 
     run = get_run_info(fcid)
+    manufacturer = run['sequencer']['manufacturer']
 
     if success:
         print("qc_delivery.py: Passed QC")
@@ -175,9 +183,11 @@ def check_qc_and_deliver(path, summary_report_path):
         print("data delivered to: ", delivery_dir)
         
         # get delivery email
-        message = get_qc_messages(stats)
+        message = ''
+        if manufacturer == "Illumina":
+            message = get_qc_messages(stats)
         mqc_report_url = "http://core-fastqc.bio.nyu.edu/{}/{}/multiqc_report.html".format(fcid, lane_num)
-        delivery_email = get_delivery_email(fcid, delivery_dir, raw_run_dir_path, mqc_report_url, message, pool['no_demux'], pool['allowed_barcode_mismatch'])
+        delivery_email = get_delivery_email(fcid, delivery_dir, raw_run_dir_path, mqc_report_url, message, pool['no_demux'], pool['allowed_barcode_mismatch'], manufacturer)
         
         # update lane stats in tuboweb
         update_lane_stats(fcid, i, 'total_num_reads', stats["Total # of Single-End Reads"])
@@ -201,14 +211,20 @@ def check_qc_and_deliver(path, summary_report_path):
     else:
         message = ''
         sequencer_name = run['sequencer']['name']
-        if run['is_revcom_index2'] and ('NextSeq' in sequencer_name or 'NovaSeq' in sequencer_name):
-            first_demux_undetermined_pct = get_first_demux_undetermined_pct(fcid, 2)
+        first_demux_undetermined_pct = get_first_demux_undetermined_pct(fcid, 1)
+        if (run['is_revcom_index2'] or first_demux_undetermined_pct is not None) \
+            and ('NextSeq' in sequencer_name or 'NovaSeq' in sequencer_name):
             if first_demux_undetermined_pct is None:
-                set_first_demux_undetermined_pct(fcid, 2, stats["% Undetermined"])
+                send_email(["mk5636@nyu.edu"], "ERROR For {}".format(fcid), 'first_demux_undetermined_pct is None') 
+                print("first_demux_undetermined_pct is None")
+                set_first_demux_undetermined_pct(fcid, 1, stats["% Undetermined"])
                 flip_index2_revcom(fcid)
                 run_redemux(fcid)
                 message = "Resubmitted for demultiplexing. Undetermined after Demultiplex Attempt 1 = {}%".format(stats["% Undetermined"])
+                send_email(["mk5636@nyu.edu"], "ERROR For {}".format(fcid), message)
             else:
+                send_email(["mk5636@nyu.edu"], "ERROR For {}".format(fcid), "first_demux_undetermined_pct is not None it's: " + str(first_demux_undetermined_pct))
+                print("first_demux_undetermined_pct is not None it's: " + str(first_demux_undetermined_pct))
                 message = "Undetermined\nDemultiplex Attempt 1 = {}%\nDemultiplex Attempt 2 = {}%".format(first_demux_undetermined_pct, stats["% Undetermined"])
         else:
             message = error + "\nNo Auto Redemultiplexing\nhttp://core-fastqc.bio.nyu.edu/" + fcid

@@ -31,9 +31,8 @@ then
         echo "# id: 'undetermined_barcodes'"
         echo "# plot_type: 'table'"
         echo "# section_name: '	Barcodes of Undetermined Reads'"
-        echo "# description: \"<br />We have determined the barcodes of your undetermined reads. Here are the top 20 barcodes. The full list is available <a href='undetermined_barcodes.txt'>here</a>. <b>If your libraries are dual indexed, the two indices are concatenated.</b>\""
-        echo "Barcode Sequence(s)	Count	Frequency (%)"
-        head -20 undetermined_barcodes.txt
+        echo "# description: \"<br />We have determined the barcodes of your undetermined reads. Here are the top 20 barcodes. The full list is available <a href='undetermined_barcodes.txt'>here</a>.\""
+        head -21 undetermined_barcodes.txt
     } > $undetermined_barcodes_mqc
 
     echo "Finished analyzing undetermined read barcodes"

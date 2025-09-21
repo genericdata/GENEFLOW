@@ -1,17 +1,27 @@
 #!/usr/bin/env python3
 
 import os
+import re
 import sys
 import requests
 import json
 import glob
 import smtplib
+import logging
+import subprocess
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from xml.dom import minidom
 from shutil import copyfile, copytree
-from config import tw_api_root, tw_user, tw_api_key, gmail_user, gmail_pwd, raw_run_root
+from config import tw_api_root, tw_user, tw_api_key, gmail_user, gmail_pwd, raw_run_root, alpha
 
+
+logging.basicConfig(
+    filename='slime.log',
+    level=logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    filemode='a'
+)
 
 def send_email(recipient, subject, body):
     FROM = gmail_user
@@ -48,11 +58,30 @@ def get_run_info(fcid):
 
 
 def get_num_lanes(fcid):
-    run_url = f"{tw_api_root}flowcell/illumina/{fcid}/num_lanes"
-    params = {"username": tw_user, "api_key": tw_api_key}
-    response = requests.get(run_url, params=params)
-    run_data = response.json()
-    return run_data
+    # New way: check locally
+    # Reflects actual data on disk 
+    # (won’t silently mis-count if LIMS is stale or a lane failed).
+    run_dir = get_run_dir(fcid)['run_dir']
+
+    # 1) Illumina: check for BaseCalls/L### dirs
+    illumina_base = os.path.join(run_dir, 'Data', 'Intensities', 'BaseCalls')
+    if os.path.isdir(illumina_base):
+        lanes = [d for d in os.listdir(illumina_base) 
+                 if re.match(r'^L\d{3}$', d)]
+        if lanes:
+            return len(lanes)
+
+    # 2) Aviti: look in Location for .loc files like L1R19C02S1.loc
+    loc_dir = os.path.join(run_dir, 'Location')
+    if os.path.isdir(loc_dir):
+        # extract the lane number after the leading “L”
+        lane_ids = set()
+        for fname in os.listdir(loc_dir):
+            m = re.match(r'^L(\d+)R\d+C\d+S\d+\.loc$', fname)
+            if m:
+                lane_ids.add(m.group(1))
+        if lane_ids:
+            return len(lane_ids)
 
 
 def get_lanes(run_id):
@@ -128,11 +157,19 @@ def get_run_dir(fcid):
 
 
 def check_do_merge(fcid):
-    run = get_run_info(fcid)
+    run = get_run_info(fcid) 
     run_type = run["run_type_name"]
     return (
-        "NextSeq" in run["sequencer"]["name"] or "NovaSeq" in run["sequencer"]["name"]
-    ) and not run_type.startswith("XP")
+        "NextSeq" in run["sequencer"]["name"] or  # Sequencer is NextSeq
+        ( 
+            "NovaSeq" in run["sequencer"]["name"] and  # Sequencer is NovaSeq
+            not run_type.startswith("XP")  # Run type does not start with "XP"
+        ) or
+        (
+            "Aviti" in run["sequencer"]["name"] and  # Sequencer is Aviti
+            run_type.startswith("ML - ")  # Run type starts with "ML"
+        )
+    )
 
 
 # Check if the pool in this lane needs to be demultiplexed or not
@@ -163,6 +200,8 @@ def reverse_complement(seq):
 
 
 def set_first_demux_undetermined_pct(fcid, num, val):
+    logging.debug(f'{fcid}: Setting first demux undetermined pct')
+    print("Setting first demux undetermined pct")
     url = f"{tw_api_root}flowcell/illumina/{fcid}/set_first_demux_undetermined_pct/{num}"
     params = {"username": tw_user, "api_key": tw_api_key, "value": val}
     response = requests.get(url, params=params)
@@ -178,16 +217,18 @@ def get_first_demux_undetermined_pct(fcid, num):
     return data
 
 def run_redemux(fcid):
+    print("running redemux")
+    logging.debug(f'{fcid}: running redemux')
     # Define the base command and parameters
     root_log_dir = alpha + "/logs/"
     
     base_cmd = 'sbatch'
     output_cmd = f"--output={root_log_dir}/{fcid}/pipeline/slurm-%j-redemux.out"
     error_cmd = f"--error={root_log_dir}/{fcid}/pipeline/slurm-%j-redemux.err"
-    job_name_cmd = f"--job-name=GENEFLOW_MANAGER_({fcid})_redemux"
+    job_name_cmd = f"--job-name=GENEFLOW_MANAGER_\\({fcid}\\)_redemux"
     
     # Find the run directory
-    find_cmd = f"find -maxdepth 2 -type d -name '*{fcid}'"
+    find_cmd = f"cd /scratch/gencore/sequencers/; find -maxdepth 2 -type d -name '*{fcid}'"
     rundir_cmd = f"rundir=$({find_cmd}); echo rundir = $rundir;"
     
     # Construct the launch command with the found run directory
@@ -203,10 +244,11 @@ def run_redemux(fcid):
     # Format and print the output
     formatted_output = f"\n{full_cmd}\n{demux_output}\n"
     print(f"Auto-Redemuxing\n{formatted_output}")
-    
+    logging.debug(f'{fcid}: Auto-Redemuxing\n{formatted_output}')
+    send_email(["mk5636@nyu.edu"], "ERROR For {}".format(fcid), f"Auto-Redemuxing\n{formatted_output}")
     
 def set_pool_index_revcom(pool_id, i):
-    url = f"{tw_api_root}librarypool/{pool_id}/setindexisrevcom/{i}/"
+    url = f"{tw_api_root}librarypool/{pool_id}/setindexisrevcom/{i}"
     params = {"username": tw_user, "api_key": tw_api_key}
     response = requests.get(url, params=params)
     data = response.json()
@@ -214,10 +256,16 @@ def set_pool_index_revcom(pool_id, i):
 
 
 def set_run_index_revcom(fcid, status):
+    run = get_run_info(fcid)
+    logging.debug(f'{fcid}: set_run_index_revcom, run pre set_run_index_revcom: {run}')
+    #send_email(["mk5636@nyu.edu"], "ERROR For {}".format(fcid), "set_run_index_revcom, run pre set_run_index_revcom: {}".format(str(run)))
     url = f"{tw_api_root}flowcell/illumina/{fcid}/setindexisrevcom/{status}"
     params = {"username": tw_user, "api_key": tw_api_key}
     response = requests.get(url, params=params)
     data = response.json()
+    run = get_run_info(fcid)
+    logging.debug(f'{fcid}: set_run_index_revcom, run pre set_run_index_revcom response: {data}; run post set_run_index_revcom: {run}')
+    #send_email(["mk5636@nyu.edu"], "ERROR For {}".format(fcid), 'set_run_index_revcom response: {}\nrun post set_run_index_revcom: {}'.format(data, run))
     return data
 
 
@@ -227,14 +275,24 @@ def flip_index2_revcom(fcid):
     Right now we just turn off, but we can set this to be a parameter
     or to toggle it based on the current state.
     """
+    logging.debug(f'{fcid}: flipping index2 revcom')
+    print("flipping index2 revcom")
     run = get_run_info(fcid)
     lanes = get_lanes(run['id'])
-    for lane in lanes:
-        pool = get_pool(lane['pool']['id'])
+    for lane in lanes['lanes']:
+        pool_o = get_pool(lane['id'])
+        pool = pool_o['id']
+        logging.debug(f'{fcid}: lane = {lane}; pool = {pool_o}')
+        #send_email(["mk5636@nyu.edu"], "ERROR For {}".format(fcid), 'lane = {}; pool = {}'.format(lane, pool_o))
         # turn off revcom for index 2 for all pools
-        set_pool_index_revcom(pool, 0)
+        r = set_pool_index_revcom(pool, 0)
+        print("r: {}".format(r))
+        pool_o = get_pool(lane['id'])
+        logging.debug(f'{fcid}: set_pool_index_revcom(pool, 0) response = {r}, pool = {pool_o}')
+        #send_email(["mk5636@nyu.edu"], "ERROR For {}".format(fcid), "set_pool_index_revcom(pool, 0), pool = {}".format(pool_o))
     # turn off revcom for index 2 for the run
     set_run_index_revcom(fcid, 0)
+    print("Finished flipping index2 revcom")
 
 def change_permissions_recursive(path, mode):
     # Change the directory's own permissions

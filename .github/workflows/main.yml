@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   update_config:
@@ -15,8 +16,9 @@ jobs:
       - name: Checkout PR branch
         uses: actions/checkout@v4
         with:
+          # This specifically checks out the PR's branch, not the base branch.
           ref: ${{ github.event.pull_request.head.ref }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT }}
 
       - name: Parse Docker image and update Nextflow config
         run: |
@@ -48,6 +50,11 @@ jobs:
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git add $CONFIG_FILE
-          git commit -m "chore: Update container version from Dockerfile" || echo "No changes to commit."
-          git push
+          git add nextflow.config
+          # Check if there are changes to commit to avoid an error
+          if ! git diff-index --quiet HEAD; then
+            git commit -m "chore: Update container version from Dockerfile"
+            git push
+          else
+            echo "No changes to commit."
+          fi

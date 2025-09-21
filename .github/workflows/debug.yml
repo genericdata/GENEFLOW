@@ -1,0 +1,20 @@
+name: Debug Dependabot Trigger
+
+# The trigger remains the same
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+
+jobs:
+  debug_trigger:
+    runs-on: ubuntu-latest
+    steps:
+      # This simple step will run if the trigger is successful.
+      # It prints out the context, which is very useful for debugging.
+      - name: Print event context
+        run: |
+          echo "Workflow was successfully triggered!"
+          echo "Event name: ${{ github.event_name }}"
+          echo "Triggering actor: ${{ github.actor }}"
+          echo "PR Head Ref: ${{ github.event.pull_request.head.ref }}"
+

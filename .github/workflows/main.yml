@@ -16,7 +16,7 @@ jobs:
       - name: Checkout PR branch
         uses: actions/checkout@v4
         with:
-          # This specifically checks out the PR's branch, not the base branch.
+          # This specifically checks out the PR's branch, not the base branch
           ref: ${{ github.event.pull_request.head.ref }}
           token: ${{ secrets.PAT }}
 

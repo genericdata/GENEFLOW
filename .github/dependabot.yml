@@ -16,5 +16,4 @@ updates:
       - "/env/bases2fastq"
     schedule:
       interval: "daily"
-    target-file: "*.Dockerfile"
     target-branch: "module-profile"

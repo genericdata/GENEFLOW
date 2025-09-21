@@ -11,7 +11,9 @@ updates:
       interval: "daily"
     target-branch: "module-profile"
   - package-ecosystem: "docker"
-    directory: "/env"
+    directories:
+      - "/env/picard"
+      - "/env/bases2fastq"
     schedule:
       interval: "daily"
     target-file: "*.Dockerfile"

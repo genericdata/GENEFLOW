@@ -1,20 +1,22 @@
 name: Debug Dependabot Trigger
 
-# The trigger remains the same
+# We've added workflow_dispatch here. This allows for manual triggering.
 on:
   pull_request_target:
     types: [opened, reopened, synchronize]
+  workflow_dispatch:
 
 jobs:
   debug_trigger:
     runs-on: ubuntu-latest
     steps:
-      # This simple step will run if the trigger is successful.
-      # It prints out the context, which is very useful for debugging.
       - name: Print event context
         run: |
           echo "Workflow was successfully triggered!"
           echo "Event name: ${{ github.event_name }}"
           echo "Triggering actor: ${{ github.actor }}"
-          echo "PR Head Ref: ${{ github.event.pull_request.head.ref }}"
+          # This check helps us see what the PR ref is when the event is not manual
+          if [[ "${{ github.event_name }}" == "pull_request_target" ]]; then
+            echo "PR Head Ref: ${{ github.event.pull_request.head.ref }}"
+          fi
 

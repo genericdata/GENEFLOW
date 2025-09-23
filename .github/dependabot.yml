@@ -9,11 +9,12 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
-    target-branch: "module-profile"
+    target-branch: "main"
+
   - package-ecosystem: "docker"
     directories:
       - "/env/picard"
       - "/env/bases2fastq"
     schedule:
       interval: "daily"
-    target-branch: "module-profile"
+    target-branch: "main"

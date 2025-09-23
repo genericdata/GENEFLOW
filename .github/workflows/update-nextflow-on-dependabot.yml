@@ -1,0 +1,103 @@
+name: Update nextflow.config on Dependabot Docker PR
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+    paths:
+      - 'env/picard/Dockerfile'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-nextflow-config:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout PR HEAD safely
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          persist-credentials: false
+
+      - name: Parse image & version from env/picard/Dockerfile
+        id: parse
+        shell: bash
+        run: |
+          set -euo pipefail
+          DOCKERFILE="env/picard/Dockerfile"
+          if [[ ! -f "$DOCKERFILE" ]]; then
+            echo "skip=true" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          FULL_IMAGE="$(awk '/^FROM[[:space:]]+/ {print $2; exit}' "$DOCKERFILE")"
+          if [[ -z "${FULL_IMAGE:-}" ]]; then
+            echo "Could not parse FROM line in $DOCKERFILE"; exit 1
+          fi
+
+          IMAGE_BASE="${FULL_IMAGE%%:*}"
+          NEW_TAG="${FULL_IMAGE#*:}"
+
+          echo "image_base=$IMAGE_BASE" >>"$GITHUB_OUTPUT"
+          echo "new_tag=$NEW_TAG" >>"$GITHUB_OUTPUT"
+          echo "skip=false" >>"$GITHUB_OUTPUT"
+
+      - name: Update nextflow.config
+        if: steps.parse.outputs.skip == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONFIG_FILE="nextflow.config"
+          IMAGE_BASE="${{ steps.parse.outputs.image_base }}"
+          NEW_TAG="${{ steps.parse.outputs.new_tag }}"
+
+          if [[ ! -f "$CONFIG_FILE" ]]; then
+            echo "Missing $CONFIG_FILE"; exit 1
+          fi
+
+          BEFORE_HASH="$(sha256sum "$CONFIG_FILE" | awk '{print $1}')"
+
+          # 1) container = 'base:anything'  (single or double quotes)
+          sed -i -E "s|(container[[:space:]]*=[[:space:]]*['\"])${IMAGE_BASE}:[^'\"]*(['\"])|\1${IMAGE_BASE}:${NEW_TAG}\2|g" "$CONFIG_FILE"
+
+          # 2) process.container = 'base:anything'
+          sed -i -E "s|(process\.container[[:space:]]*=[[:space:]]*['\"])${IMAGE_BASE}:[^'\"]*(['\"])|\1${IMAGE_BASE}:${NEW_TAG}\2|g" "$CONFIG_FILE"
+
+          # 3) Any stray appearances of base:tag (quote-agnostic), last-resort generic swap
+          sed -i -E "s|(${IMAGE_BASE}:)[0-9A-Za-z._-]+|\1${NEW_TAG}|g" "$CONFIG_FILE"
+
+          AFTER_HASH="$(sha256sum "$CONFIG_FILE" | awk '{print $1}')"
+
+          if [[ "$BEFORE_HASH" == "$AFTER_HASH" ]]; then
+            echo "No container reference to update in $CONFIG_FILE for base ${IMAGE_BASE}."
+            echo "Likely the image is referenced elsewhere or via a param; skipping commit."
+            exit 0
+          fi
+
+          echo "=== Diff ==="
+          git --no-pager diff -- "$CONFIG_FILE" || true
+
+      - name: Commit & push back to PR branch
+        if: steps.parse.outputs.skip == 'false'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- nextflow.config; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add nextflow.config
+          git commit -m "chore(nextflow): sync container tag with Dockerfile (${GITHUB_SHA::7})"
+
+          PR_HEAD="${{ github.event.pull_request.head.ref }}"
+          REPO="${{ github.repository }}"
+          git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${REPO}.git" "HEAD:${PR_HEAD}"

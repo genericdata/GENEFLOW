@@ -1,2 +1,2 @@
-FROM elembio/bases2fastq:2.0.0
+FROM elembio/bases2fastq:2.2.1
 CMD ["bases2fastq "]

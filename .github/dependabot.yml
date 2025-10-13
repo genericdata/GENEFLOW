@@ -11,6 +11,12 @@ updates:
       interval: "daily"
     target-branch: "main"
 
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    target-branch: "main"
+
   - package-ecosystem: "docker"
     directories:
       - "/env/picard"

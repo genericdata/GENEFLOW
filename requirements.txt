@@ -1,4 +1,4 @@
 # Python dependencies from environment.yml
 # This file is created to enable dependabot updates for pip packages
 interop==1.1.4
-multiqc==1.27
+multiqc==1.32

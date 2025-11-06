@@ -4,8 +4,7 @@ on:
   pull_request_target:
     types: [opened, reopened, synchronize]
     paths:
-      - 'env/picard/Dockerfile'
-      - 'env/bases2fastq/Dockerfile'
+      - 'env/**/Dockerfile'
 
 permissions:
   contents: write
@@ -24,24 +23,36 @@ jobs:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           persist-credentials: false
 
+      - name: Fetch base branch for comparison
+        shell: bash
+        run: |
+          git fetch origin "${{ github.event.pull_request.base.ref }}"
+
       - name: Parse image & version from Dockerfile
         id: parse
         shell: bash
         run: |
           set -euo pipefail
           
-          # Check which Dockerfile was modified
-          if [[ -f "env/picard/Dockerfile" ]]; then
-            DOCKERFILE="env/picard/Dockerfile"
-            echo "Processing Picard Dockerfile"
-          elif [[ -f "env/bases2fastq/Dockerfile" ]]; then
-            DOCKERFILE="env/bases2fastq/Dockerfile"
-            echo "Processing Bases2Fastq Dockerfile"
-          else
-            echo "No supported Dockerfile found"
+          BASE_REF="origin/${{ github.event.pull_request.base.ref }}"
+          CHANGED_DOCKERFILES=$(git diff --name-only --diff-filter=AM "$BASE_REF" HEAD -- "env/*/Dockerfile" | grep -E '^env/[^/]+/Dockerfile$' || true)
+          
+          if [[ -z "$CHANGED_DOCKERFILES" ]]; then
+            echo "No Dockerfile changes detected in env/*/Dockerfile"
             echo "skip=true" >>"$GITHUB_OUTPUT"
             exit 0
           fi
+          
+          DOCKERFILE=$(echo "$CHANGED_DOCKERFILES" | head -n1)
+          
+          if [[ ! -f "$DOCKERFILE" ]]; then
+            echo "Dockerfile $DOCKERFILE not found in working tree"
+            echo "skip=true" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          
+          DIR_NAME=$(dirname "$DOCKERFILE" | sed 's|^env/||')
+          echo "Processing Dockerfile: $DOCKERFILE (directory: $DIR_NAME)"
 
           FULL_IMAGE="$(awk '/^FROM[[:space:]]+/ {print $2; exit}' "$DOCKERFILE")"
           if [[ -z "${FULL_IMAGE:-}" ]]; then
@@ -75,21 +86,12 @@ jobs:
 
           echo "Updating container references for $IMAGE_BASE:$NEW_TAG"
 
-          # Update all container references in nextflow.config
-          # This handles various formats:
-          # 1. container = 'docker://base:tag'
-          # 2. container = 'base:tag' 
-          # 3. process.container = 'base:tag'
-          # 4. Any other format with base:tag pattern
-          
           sed -i -E "s|(container[[:space:]]*=[[:space:]]*['\"])${IMAGE_BASE}:[^'\"]*(['\"])|\1${IMAGE_BASE}:${NEW_TAG}\2|g" "$CONFIG_FILE"
           sed -i -E "s|(process\.container[[:space:]]*=[[:space:]]*['\"])${IMAGE_BASE}:[^'\"]*(['\"])|\1${IMAGE_BASE}:${NEW_TAG}\2|g" "$CONFIG_FILE"
           
-          # Handle docker:// prefix specifically
           sed -i -E "s|(container[[:space:]]*=[[:space:]]*['\"])docker://${IMAGE_BASE}:[^'\"]*(['\"])|\1docker://${IMAGE_BASE}:${NEW_TAG}\2|g" "$CONFIG_FILE"
           sed -i -E "s|(process\.container[[:space:]]*=[[:space:]]*['\"])docker://${IMAGE_BASE}:[^'\"]*(['\"])|\1docker://${IMAGE_BASE}:${NEW_TAG}\2|g" "$CONFIG_FILE"
 
-          # Generic fallback for any remaining base:tag patterns
           sed -i -E "s|(${IMAGE_BASE}:)[0-9A-Za-z._-]+|\1${NEW_TAG}|g" "$CONFIG_FILE"
 
           AFTER_HASH="$(sha256sum "$CONFIG_FILE" | awk '{print $1}')"

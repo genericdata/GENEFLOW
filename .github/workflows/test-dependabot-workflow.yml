@@ -1,0 +1,70 @@
+name: Test Dependabot Workflow
+
+# This workflow can be manually triggered to test the dependabot workflow logic
+on:
+  workflow_dispatch:
+    inputs:
+      dockerfile_path:
+        description: 'Path to Dockerfile to test'
+        required: true
+        default: 'env/picard/Dockerfile'
+      test_version:
+        description: 'Test version to use'
+        required: true
+        default: '2.30.0'
+
+jobs:
+  test-workflow:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create test Dockerfile
+        run: |
+          mkdir -p "$(dirname "${{ github.event.inputs.dockerfile_path }}")"
+          echo "FROM broadinstitute/picard:${{ github.event.inputs.test_version }}" > "${{ github.event.inputs.dockerfile_path }}"
+          echo "CMD [\"/bin/bash\"]" >> "${{ github.event.inputs.dockerfile_path }}"
+
+      - name: Parse image & version from Dockerfile
+        id: parse
+        shell: bash
+        run: |
+          set -euo pipefail
+          DOCKERFILE="${{ github.event.inputs.dockerfile_path }}"
+          
+          FULL_IMAGE="$(awk '/^FROM[[:space:]]+/ {print $2; exit}' "$DOCKERFILE")"
+          if [[ -z "${FULL_IMAGE:-}" ]]; then
+            echo "Could not parse FROM line in $DOCKERFILE"; exit 1
+          fi
+
+          IMAGE_BASE="${FULL_IMAGE%%:*}"
+          NEW_TAG="${FULL_IMAGE#*:}"
+
+          echo "dockerfile_path=$DOCKERFILE" >>"$GITHUB_OUTPUT"
+          echo "image_base=$IMAGE_BASE" >>"$GITHUB_OUTPUT"
+          echo "new_tag=$NEW_TAG" >>"$GITHUB_OUTPUT"
+          echo "skip=false" >>"$GITHUB_OUTPUT"
+          
+          echo "Found Docker image: $IMAGE_BASE:$NEW_TAG"
+
+      - name: Show what would be updated
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONFIG_FILE="nextflow.config"
+          IMAGE_BASE="${{ steps.parse.outputs.image_base }}"
+          NEW_TAG="${{ steps.parse.outputs.new_tag }}"
+
+          echo "=== Current nextflow.config container references ==="
+          grep -n "container.*$IMAGE_BASE" "$CONFIG_FILE" || echo "No references found"
+          
+          echo ""
+          echo "=== What would be updated ==="
+          echo "Looking for patterns like: $IMAGE_BASE:*"
+          echo "Would replace with: $IMAGE_BASE:$NEW_TAG"
+
+      - name: Cleanup test files
+        if: always()
+        run: |
+          rm -f "${{ github.event.inputs.dockerfile_path }}"

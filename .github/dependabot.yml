@@ -24,4 +24,5 @@ updates:
     schedule:
       interval: "daily"
     target-branch: "main"
+    open-pull-requests-limit: 10
 # Trigger dependabot scan - force refresh
